@@ -40,7 +40,10 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
   for(let i=0;i<segments.length;i++) for(let j=i+1;j<segments.length;j++) {
     if(segments[i].id===segments[j].id) continue;
     const p=segmentIntersection(segments[i].s,segments[j].s);
-    if(p && distance(p,cursorWorld)<=tolerance) addSnap(snaps,"intersection",p,segments[i].id,cursorWorld,pxScale);
+    if(p && distance(p,cursorWorld)<=tolerance) {
+      addSnap(snaps,"intersection",p,segments[i].id,cursorWorld,pxScale);
+      if(segments[i].grid && segments[j].grid) addSnap(snaps,"grid",p,segments[i].id,cursorWorld,pxScale);
+    }
   }
   if(context.lastPoint) for(const item of segments) {
     const p=projectPointOnLine(context.lastPoint,item.s);
@@ -54,7 +57,7 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
   for(const item of segments) for(const p of [item.s.start,item.s.end,midpoint(item.s.start,item.s.end)]) if(distance(p,cursorWorld)<=tolerance*2) anchors.push({point:p,id:item.id});
   if(context.lastPoint) {
     const origin=context.lastPoint, delta=sub(cursorWorld,origin), a=angleOf(delta), inc=(context.polarIncrementDeg??15)*Math.PI/180;
-    const polar=Math.round(a/inc)*inc, projected=add(origin,scale(fromAngle(polar),dot(delta,fromAngle(polar))));
+    const polar=context.shift && context.direction ? angleOf(context.direction) : Math.round(a/inc)*inc, projected=add(origin,scale(fromAngle(polar),dot(delta,fromAngle(polar))));
     if(context.shift || distance(projected,cursorWorld)<=tolerance) { point=projected; guides.push({type:"polar",start:origin,end:projected,angle:polar}); }
     for(const anchor of anchors) {
       if(Math.abs(anchor.point.x-cursorWorld.x)<=tolerance) guides.push({type:"vertical",start:anchor.point,end:{x:anchor.point.x,y:cursorWorld.y},entityId:anchor.id});
