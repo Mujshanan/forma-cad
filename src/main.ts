@@ -1,7 +1,7 @@
 import { infer, type InferenceResult } from "./core/inference";
 import { createDocument, type Entity, type DocumentModel, type Vec2 } from "./core/model";
 import { SpatialIndex } from "./core/spatial";
-import { screenToWorld, worldToScreen, zoomAt, type ViewTransform } from "./core/view";
+import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import "./style.css";
 
 type Tool = "select" | "line" | "grid" | "column" | "beam" | "wall";
