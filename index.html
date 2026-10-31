@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#171a20" />
+    <title>Forma CAD — Structural Drafting</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="Forma CAD home"><span class="brand-mark">F</span><span>FORMA <b>CAD</b></span></a>
+        <nav class="file-actions" aria-label="Project actions">
+          <button id="new-project" class="quiet">New</button>
+          <button id="open-project" class="quiet">Open</button>
+          <button id="save-project" class="quiet">Save JSON</button>
+          <input id="file-input" type="file" accept=".json,application/json" hidden />
+        </nav>
+        <div class="topbar-spacer"></div>
+        <span class="project-name">Untitled structural plan</span>
+        <span class="save-state"><i></i> Local project</span>
+      </header>
+      <div class="workspace">
+        <aside class="toolrail">
+          <div class="rail-label">DRAW</div>
+          <button class="tool active" data-tool="select" title="Select (V)"><span>↖</span><small>Select</small></button>
+          <button class="tool" data-tool="line" title="Line (L)"><span>／</span><small>Line</small></button>
+          <button class="tool" data-tool="grid" title="Grid (G)"><span>▦</span><small>Grid</small></button>
+          <button class="tool" data-tool="column" title="Column (C)"><span>▣</span><small>Column</small></button>
+          <button class="tool" data-tool="beam" title="Beam (B)"><span>━</span><small>Beam</small></button>
+          <button class="tool" data-tool="wall" title="Wall (W)"><span>▰</span><small>Wall</small></button>
+          <div class="rail-divider"></div>
+          <button id="delete-selection" class="tool" title="Delete selected"><span>⌫</span><small>Delete</small></button>
+        </aside>
+        <main class="drawing-area">
+          <div class="canvas-toolbar">
+            <div class="tool-context"><span class="context-dot"></span><span id="active-tool-name">Select</span><span class="context-hint">ESC to cancel · Middle mouse or Space to pan</span></div>
+            <div class="canvas-actions"><button id="zoom-fit" class="quiet">Fit drawing</button><button id="toggle-snap" class="toggle on">Snap <kbd>F3</kbd></button></div>
+          </div>
+          <div class="canvas-wrap">
+            <svg id="drawing-canvas" role="img" aria-label="Structural drafting canvas">
+              <defs>
+                <pattern id="minor-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="#252b35" stroke-width="1"/></pattern>
+                <pattern id="major-grid" width="200" height="200" patternUnits="userSpaceOnUse"><rect width="200" height="200" fill="url(#minor-grid)"/><path d="M 200 0 L 0 0 0 200" fill="none" stroke="#303845" stroke-width="1"/></pattern>
+              </defs>
+              <rect class="canvas-background" width="100%" height="100%" fill="url(#major-grid)"/>
+              <g id="world-layer"></g>
+              <g id="overlay-layer"></g>
+            </svg>
+            <div class="canvas-hint" id="canvas-hint">Choose a tool and click to start drawing</div>
+            <div class="coordinate-readout"><span id="coordinate-readout">X 0.0 · Y 0.0 mm</span><span id="zoom-readout">8%</span></div>
+          </div>
+          <footer class="statusbar"><span><i class="status-dot"></i> Ready</span><span id="snap-readout">SNAP: ON</span><span>UNITS: mm</span><span>WORLD: Y-UP</span><span id="entity-count">0 objects</span></footer>
+        </main>
+        <aside class="properties-panel">
+          <div class="panel-heading">PROPERTIES <span>⋯</span></div>
+          <div id="properties-content" class="properties-content">
+            <div class="empty-selection"><div class="empty-icon">◇</div><b>Nothing selected</b><p>Select an object to inspect its properties.</p></div>
+          </div>
+          <div class="panel-heading layers-heading">LAYERS <span>＋</span></div>
+          <div id="layer-list" class="layer-list"></div>
+        </aside>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
