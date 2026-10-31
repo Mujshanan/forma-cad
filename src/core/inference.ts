@@ -79,5 +79,5 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
   const unique:Guide[]=[]; for(const g of guides) if(!unique.some(x=>x.type===g.type && x.entityId===g.entityId)) unique.push(g);
   const chosen=unique.slice(0,2);
   const label = selected ? selected.type[0].toUpperCase()+selected.type.slice(1) : chosen[0] ? chosen[0].type[0].toUpperCase()+chosen[0].type.slice(1) : undefined;
-  return {point,snaps:selected?[selected]:[],guides:chosen,label};
+  return {point,snaps:sorted,guides:chosen,label};
 }
