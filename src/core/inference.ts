@@ -34,7 +34,19 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
     }
     for(const c of centerOf(e)) addSnap(snaps,"center",c,e.id,cursorWorld,pxScale);
     if(e.type==="grid") { const p=projectPointOnSegment(cursorWorld,ss[0]); if(distance(p,cursorWorld)<=tolerance) addSnap(snaps,"grid",p,e.id,cursorWorld,pxScale); }
-    if(e.type==="circle" || e.type==="arc") { const v=sub(cursorWorld,e.center), n=length(v); if(n>1e-9) addSnap(snaps,"nearest",add(e.center,scale(v,e.radius/n)),e.id,cursorWorld,pxScale); }
+    if(e.type==="circle") { const v=sub(cursorWorld,e.center), n=length(v); if(n>1e-9) addSnap(snaps,"nearest",add(e.center,scale(v,e.radius/n)),e.id,cursorWorld,pxScale); }
+    if(e.type==="arc") {
+      const tau=2*Math.PI, sweep=((e.endAngle-e.startAngle)%tau+tau)%tau;
+      const arcStart=add(e.center,scale(fromAngle(e.startAngle),e.radius));
+      const arcEnd=add(e.center,scale(fromAngle(e.endAngle),e.radius));
+      const arcMid=add(e.center,scale(fromAngle(e.startAngle+sweep/2),e.radius));
+      addSnap(snaps,"endpoint",arcStart,e.id,cursorWorld,pxScale);
+      addSnap(snaps,"endpoint",arcEnd,e.id,cursorWorld,pxScale);
+      addSnap(snaps,"midpoint",arcMid,e.id,cursorWorld,pxScale);
+      const v=sub(cursorWorld,e.center), n=length(v), angle=Math.atan2(v.y,v.x);
+      const offset=((angle-e.startAngle)%tau+tau)%tau;
+      if(n>1e-9 && offset<=sweep+1e-9) addSnap(snaps,"nearest",add(e.center,scale(v,e.radius/n)),e.id,cursorWorld,pxScale);
+    }
     for(const s of ss) { const p=projectPointOnSegment(cursorWorld,s); if(distance(p,cursorWorld)<=tolerance) addSnap(snaps,"nearest",p,e.id,cursorWorld,pxScale); }
   }
   for(let i=0;i<segments.length;i++) for(let j=i+1;j<segments.length;j++) {
@@ -55,6 +67,7 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
   const guides:Guide[]=[];
   const anchors: {point:Vec2;id:string}[]=[];
   for(const item of segments) for(const p of [item.s.start,item.s.end,midpoint(item.s.start,item.s.end)]) if(distance(p,cursorWorld)<=tolerance*2) anchors.push({point:p,id:item.id});
+  for(const e of candidates) for(const p of centerOf(e)) if(distance(p,cursorWorld)<=tolerance*2) anchors.push({point:p,id:e.id});
   if(context.lastPoint) {
     const origin=context.lastPoint, delta=sub(cursorWorld,origin), a=angleOf(delta), inc=(context.polarIncrementDeg??15)*Math.PI/180;
     const polar=context.shift && context.direction ? angleOf(context.direction) : Math.round(a/inc)*inc, projected=add(origin,scale(fromAngle(polar),dot(delta,fromAngle(polar))));
