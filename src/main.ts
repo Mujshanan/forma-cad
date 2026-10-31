@@ -1,5 +1,6 @@
 import { infer, type InferenceResult } from "./core/inference";
-import { createDocument, type Entity, type DocumentModel, type Vec2 } from "./core/model";
+import { createDocument, type Entity, type DocumentModel } from "./core/model";
+import type { Vec2 } from "./core/geometry";
 import { SpatialIndex } from "./core/spatial";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import "./style.css";
