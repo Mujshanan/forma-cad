@@ -1,5 +1,5 @@
 import type { Vec2, Segment } from "./geometry";
-import { add, sub, scale, dot, length, distance, midpoint, projectPointOnLine, projectPointOnSegment, distancePointToSegment, segmentIntersection, lineIntersection, angleOf, fromAngle } from "./geometry";
+import { add, sub, scale, dot, length, distance, midpoint, projectPointOnLine, projectPointOnSegment, segmentIntersection, angleOf, fromAngle } from "./geometry";
 import type { Entity } from "./model";
 import { SpatialIndex } from "./spatial";
 export type SnapType = "endpoint" | "midpoint" | "center" | "intersection" | "perpendicular" | "nearest" | "grid";
@@ -75,6 +75,6 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
   if(h && v) { point={x:v.start.x,y:h.start.y}; }
   const unique:Guide[]=[]; for(const g of guides) if(!unique.some(x=>x.type===g.type && x.entityId===g.entityId)) unique.push(g);
   const chosen=unique.slice(0,2);
-  const label=selected?.type[0].toUpperCase()+selected?.type.slice(1) || chosen[0]?.type[0].toUpperCase()+chosen[0]?.type.slice(1);
+  const label = selected ? selected.type[0].toUpperCase()+selected.type.slice(1) : chosen[0] ? chosen[0].type[0].toUpperCase()+chosen[0].type.slice(1) : undefined;
   return {point,snaps:selected?[selected]:[],guides:chosen,label};
 }
