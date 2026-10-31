@@ -48,11 +48,12 @@ The geometry and inference core must remain independent of the browser DOM and r
 - `src/core/model.ts`: typed document entities and structural layers.
 - `src/core/spatial.ts`: uniform-grid spatial hash for nearby entity lookup.
 - `src/core/inference.ts`: snap candidates, tolerance handling and tracking-guide calculation.
+- `src/core/view.ts`: pure world/screen transforms and cursor-anchored zoom.
 - `src/tools/` (planned): isolated stateful drawing tools.
 - `src/interaction/` (planned): pointer/keyboard input, tracking state and tool lifecycle.
 - `src/rendering/` (planned): scene, guide, snap-marker and temporary-dimension rendering.
 - `src/document/` (planned): document operations, layers, history and persistence.
-- `src/ui/` (planned): canvas shell, toolbar and properties/layers panels.
+- `src/ui/` (planned): future componentized UI; the current prototype shell is in `index.html`, `src/main.ts` and `src/style.css`.
 - `tests/`: unit and integration tests.
 
 ### Planned inference pipeline
@@ -280,12 +281,15 @@ A feature is done only when:
 - [x] Uniform-grid spatial index.
 - [x] Initial snap candidate and guide inference.
 - [x] Vitest and TypeScript CI workflow configured.
-- [ ] Run and verify the committed Vitest suite in CI.
+- [x] Run and verify the committed Vitest suite in GitHub Actions.
 - [ ] Complete inference edge-case and stability tests.
-- [ ] Canvas, rendering and drawing tools.
-- [ ] Temporary dimensions and keyboard precision workflow.
-- [ ] Structural beam/wall tools, persistence and DXF export.
-- [ ] Windows desktop packaging.
+- [x] Initial SVG canvas shell, world/screen transforms, pan/zoom and view-transform unit tests.
+- [x] Initial select, line, grid, column, beam and wall drawing interactions.
+- [x] Initial snap markers, alignment-guide overlay and live length/angle preview labels.
+- [x] Basic JSON project save/open.
+- [ ] Improve guide tracking, snap stability and temporary dimension input.
+- [ ] Add robust editing, undo/redo, layer controls and DXF export.
+- [ ] Add browser end-to-end tests and Windows desktop packaging.
 
 ## Contributing
 
