@@ -118,7 +118,7 @@ function setTool(next: Tool) {
 }
 function inferAt(point: Vec2) {
   if (!snapEnabled) return {point,snaps:[],guides:[]};
-  return infer(point,{lastPoint:firstPoint,shift:shiftDown,candidateIndex},index,view.scale);
+  return infer(point,{lastPoint:firstPoint ?? undefined,shift:shiftDown,candidateIndex},index,view.scale);
 }
 function addEntity(entity: Entity) {
   model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; render();
