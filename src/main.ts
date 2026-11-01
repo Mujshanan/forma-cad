@@ -1,12 +1,13 @@
 import { infer, type InferenceResult, type Snap } from "./core/inference";
 import { createDocument, type Entity, type DocumentModel } from "./core/model";
 import type { Vec2 } from "./core/geometry";
-import { SpatialIndex } from "./core/spatial";
+import { SpatialIndex, entityBounds } from "./core/spatial";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import { calculateTemporaryDimensions } from "./interaction/temporary-dimensions";
 import { DraftingInputFields } from "./interaction/drafting-input-fields";
 import { DirectionLock } from "./interaction/direction-lock";
 import { AlignmentTracker } from "./core/alignment-tracker";
+import { constrainOrthogonal } from "./interaction/orthogonal";
 import "./style.css";
 
 type Tool = "select" | "line" | "grid" | "column" | "beam" | "wall";
@@ -34,6 +35,8 @@ const emptyIndex = new SpatialIndex(2000);
 const alignmentTracker = new AlignmentTracker();
 let selectedId: string | null = null;
 let snapEnabled = true;
+let orthogonalEnabled = true;
+let autoFitEnabled = false;
 let candidateIndex = 0;
 let previousSnap: Snap | undefined;
 let spaceDown = false;
@@ -81,23 +84,19 @@ function render() {
       overlayLayer.innerHTML = [[x-w,y-h],[x+w,y-h],[x+w,y+h],[x-w,y+h]].map(([px,py])=>`<circle class="selected-handle" cx="${px}" cy="${-py}" r="${5/view.scale}"/>`).join("");
     } else overlayLayer.innerHTML = "";
   } else overlayLayer.innerHTML = "";
-  const inputHud = document.querySelector<HTMLElement>("#drafting-inputs");
-  if (inputHud) {
-    inputHud.classList.toggle("hidden", !firstPoint);
-    inputHud.querySelector<HTMLElement>('[data-field="length"] .draft-value')!.textContent = draftFields.lengthText || "—";
-    inputHud.querySelector<HTMLElement>('[data-field="angle"] .draft-value')!.textContent = draftFields.angleText || "—";
-    inputHud.querySelectorAll<HTMLElement>("[data-field]").forEach(field => field.classList.toggle("active", field.dataset.field === draftFields.activeField));
-  }
   if (preview) {
     for (const guide of preview.guides) overlayLayer.innerHTML += `<line class="snap-guide" x1="${guide.start.x}" y1="${-guide.start.y}" x2="${guide.end.x}" y2="${-guide.end.y}"/>`;
     const basePoint = preview.point;
     const resolvedDraft = firstPoint ? draftFields.resolve(firstPoint, basePoint) : basePoint;
     const p = resolvedDraft ?? basePoint;
-    overlayLayer.innerHTML += `<circle class="snap-point" cx="${p.x}" cy="${-p.y}" r="${6/view.scale}"/>`;
+    const isSnapped = preview.snaps.some(snap => snap.point.x === basePoint.x && snap.point.y === basePoint.y);
+    overlayLayer.innerHTML += `<circle class="snap-point${isSnapped ? " is-snapped" : ""}" cx="${p.x}" cy="${-p.y}" r="${6/view.scale}"/>`;
     if (firstPoint) {
       const dimensions = calculateTemporaryDimensions(firstPoint, p);
-      const mid = {x:(p.x+firstPoint.x)/2,y:(p.y+firstPoint.y)/2};
-      overlayLayer.innerHTML += `<text class="dimension-label" x="${mid.x}" y="${-mid.y-90/view.scale}">${fmt(dimensions.length)} mm · ${fmt(dimensions.angleDeg)}°</text>`;
+      const lengthMarker = draftFields.activeField === "length" && !draftFields.isEmpty ? "▶ " : "";
+      const angleMarker = draftFields.activeField === "angle" && !draftFields.isEmpty ? "▶ " : "";
+      const label = `${lengthMarker}L ${draftFields.lengthText || fmt(dimensions.length)} mm · ${angleMarker}∠ ${draftFields.angleText || fmt(dimensions.angleDeg)}°`;
+      overlayLayer.innerHTML += `<text class="dimension-label listening-dimension" x="${p.x+14/view.scale}" y="${-p.y-18/view.scale}">${escapeHtml(label)}</text>`;
       const tag = tool === "column" ? "Column preview" : tool === "grid" ? "Grid preview" : tool === "beam" ? "Beam preview" : tool === "wall" ? "Wall preview" : "Line preview";
       if (tool === "column") overlayLayer.innerHTML += `<rect class="preview-geometry" x="${p.x-200}" y="${-p.y-200}" width="400" height="400"/>`;
       else overlayLayer.innerHTML += `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${p.x}" y2="${-p.y}"/>`;
@@ -140,24 +139,49 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 function inferAt(point: Vec2) {
   if (shiftDown && firstPoint && !directionLock.direction) directionLock.lock(firstPoint, point);
+  let result: InferenceResult;
   if (!snapEnabled) {
     previousSnap = undefined;
-    if (!shiftDown || !firstPoint || !directionLock.direction) return {point,snaps:[],guides:[]};
-    return infer(point, { lastPoint:firstPoint, shift:true, direction:directionLock.direction, alignmentTracker }, emptyIndex, view.scale);
+    result = (!shiftDown || !firstPoint || !directionLock.direction)
+      ? { point, snaps: [], guides: [] }
+      : infer(point, { lastPoint:firstPoint, shift:true, direction:directionLock.direction, polarIncrementDeg:orthogonalEnabled ? 90 : 15, alignmentTracker }, emptyIndex, view.scale);
+  } else {
+    result = infer(point,{ lastPoint:firstPoint ?? undefined, shift:shiftDown, direction:directionLock.direction ?? undefined, polarIncrementDeg:orthogonalEnabled ? 90 : 15, candidateIndex, previousSnap, alignmentTracker },index,view.scale);
+    previousSnap = result.snaps.find(s => s.point.x === result.point.x && s.point.y === result.point.y);
   }
-  const result = infer(point,{
-    lastPoint:firstPoint ?? undefined,
-    shift:shiftDown,
-    direction:directionLock.direction ?? undefined,
-    candidateIndex,
-    previousSnap,
-    alignmentTracker,
-  },index,view.scale);
-  previousSnap = result.snaps.find(s => s.point.x === result.point.x && s.point.y === result.point.y);
+  if (firstPoint && orthogonalEnabled && !shiftDown && draftFields.isEmpty) {
+    const constrained = constrainOrthogonal(firstPoint, result.point);
+    const type: "vertical" | "horizontal" = constrained.x === firstPoint.x ? "vertical" : "horizontal";
+    result = { ...result, point: constrained, guides: [...result.guides, { type, start: firstPoint, end: constrained }] };
+  }
   return result;
 }
+function fitDrawing() {
+  const rect = svg.getBoundingClientRect();
+  if (!model.entities.length) {
+    view = { origin: { x: rect.width / 2, y: rect.height / 2 }, scale: 0.08 };
+    render();
+    return;
+  }
+  const bounds = model.entities.map(entityBounds);
+  const minX = Math.min(...bounds.map(b => b.minX));
+  const minY = Math.min(...bounds.map(b => b.minY));
+  const maxX = Math.max(...bounds.map(b => b.maxX));
+  const maxY = Math.max(...bounds.map(b => b.maxY));
+  const padding = 1000;
+  const width = Math.max(maxX - minX, 1) + padding * 2;
+  const height = Math.max(maxY - minY, 1) + padding * 2;
+  view.scale = Math.min(3, Math.max(0.0005, Math.min((rect.width - 120) / width, (rect.height - 120) / height)));
+  view.origin = {
+    x: rect.width / 2 - (minX + maxX) / 2 * view.scale,
+    y: rect.height / 2 + (minY + maxY) / 2 * view.scale
+  };
+  render();
+}
 function addEntity(entity: Entity) {
-  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); alignmentTracker.clear(); previousSnap = undefined; candidateIndex = 0; render();
+  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); alignmentTracker.clear(); previousSnap = undefined; candidateIndex = 0;
+  if (autoFitEnabled) fitDrawing();
+  render();
 }
 function commitAt(point: Vec2) {
   if (tool === "column") {
@@ -247,6 +271,15 @@ window.addEventListener("keydown",event=>{
     if(draftFields.append(event.key)){event.preventDefault();render();return;}
   }
   if(event.key==="Delete"||event.key==="Backspace"){if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}}
+  if(event.key==="Home"){event.preventDefault();fitDrawing();}
+  if(event.key==="F8"){
+    orthogonalEnabled=!orthogonalEnabled;
+    document.querySelector<HTMLElement>("#toggle-ortho")?.classList.toggle("off",!orthogonalEnabled);
+    const readout=document.querySelector<HTMLElement>("#ortho-readout");
+    if(readout) readout.textContent=orthogonalEnabled?"ORTHO: ON":"ORTHO: OFF";
+    preview = tool !== "select" && (firstPoint !== null || snapEnabled) ? inferAt(pointerWorld) : null;
+    render();
+  }
   if(event.key==="F3"){
     snapEnabled=!snapEnabled;
     document.querySelector("#toggle-snap")?.classList.toggle("off",!snapEnabled);
@@ -270,6 +303,14 @@ window.addEventListener("blur",()=>{
 });
 document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.addEventListener("click",()=>setTool(button.dataset.tool as Tool)));
 document.querySelector("#delete-selection")?.addEventListener("click",()=>{if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}});
+document.querySelector("#toggle-ortho")?.addEventListener("click",event=>{
+  orthogonalEnabled=!orthogonalEnabled;
+  (event.currentTarget as HTMLElement).classList.toggle("off",!orthogonalEnabled);
+  const readout=document.querySelector<HTMLElement>("#ortho-readout");
+  if(readout) readout.textContent=orthogonalEnabled?"ORTHO: ON":"ORTHO: OFF";
+  preview = tool !== "select" && (firstPoint !== null || snapEnabled) ? inferAt(pointerWorld) : null;
+  render();
+});
 document.querySelector("#toggle-snap")?.addEventListener("click",event=>{
   snapEnabled=!snapEnabled;
   (event.currentTarget as HTMLElement).classList.toggle("off",!snapEnabled);
@@ -278,11 +319,12 @@ document.querySelector("#toggle-snap")?.addEventListener("click",event=>{
   render();
 });
 document.querySelector("#new-project")?.addEventListener("click",()=>{if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;preview=null;draftFields.clear();alignmentTracker.clear();directionLock.clear();rebuildIndex();render();});
-document.querySelector("#zoom-fit")?.addEventListener("click",()=>{
-  if(!model.entities.length){const rect=svg.getBoundingClientRect();view={origin:{x:rect.width/2,y:rect.height/2},scale:.08};}
-  else {const xs:number[]=[],ys:number[]=[];for(const e of model.entities){if("start" in e){xs.push(e.start.x,e.end.x);ys.push(e.start.y,e.end.y);}else if(e.type==="column"){xs.push(e.center.x-e.width/2,e.center.x+e.width/2);ys.push(e.center.y-e.height/2,e.center.y+e.height/2);}}if(xs.length){const rect=svg.getBoundingClientRect(),w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);view.scale=Math.min(3,Math.max(.0005,Math.min((rect.width-120)/(w+1000),(rect.height-120)/(h+1000))));view.origin={x:rect.width/2-(Math.min(...xs)+Math.max(...xs))/2*view.scale,y:rect.height/2+(Math.min(...ys)+Math.max(...ys))/2*view.scale};}}
-  render();
+document.querySelector("#zoom-fit")?.addEventListener("click",fitDrawing);
+document.querySelector("#toggle-auto-fit")?.addEventListener("click",event=>{
+  autoFitEnabled=!autoFitEnabled;
+  (event.currentTarget as HTMLElement).classList.toggle("off",!autoFitEnabled);
 });
+
 document.querySelector("#save-project")?.addEventListener("click",()=>{
   const blob=new Blob([JSON.stringify({version:1,...model},null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="forma-cad-project.json";a.click();URL.revokeObjectURL(url);

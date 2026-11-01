@@ -35,7 +35,7 @@
         <main class="drawing-area">
           <div class="canvas-toolbar">
             <div class="tool-context"><span class="context-dot"></span><span id="active-tool-name">Select</span><span class="context-hint">ESC to cancel · Middle mouse or Space to pan</span></div>
-            <div class="canvas-actions"><button id="zoom-fit" class="quiet">Fit drawing</button><button id="toggle-snap" class="toggle on">Snap <kbd>F3</kbd></button></div>
+            <div class="canvas-actions"><button id="zoom-fit" class="quiet" title="Fit drawing (Home)">Fit drawing</button><button id="toggle-auto-fit" class="toggle off" title="Automatically fit view after each committed object">Auto Fit</button><button id="toggle-ortho" class="toggle on">Ortho <kbd>F8</kbd></button><button id="toggle-snap" class="toggle on">Snap <kbd>F3</kbd></button></div>
           </div>
           <div class="canvas-wrap">
             <svg id="drawing-canvas" role="img" aria-label="Structural drafting canvas">
@@ -47,17 +47,10 @@
               <g id="world-layer"></g>
               <g id="overlay-layer"></g>
             </svg>
-            <div class="drafting-inputs hidden" id="drafting-inputs" aria-label="Temporary dimension inputs">
-              <div class="drafting-inputs-title">TEMPORARY DIMENSIONS <span>Tab to switch</span></div>
-              <div class="drafting-fields">
-                <div class="draft-field active" data-field="length"><span>Length</span><strong class="draft-value">—</strong><small>mm</small></div>
-                <div class="draft-field" data-field="angle"><span>Angle</span><strong class="draft-value">—</strong><small>°</small></div>
-              </div>
-            </div>
             <div class="canvas-hint" id="canvas-hint">Choose a tool and click to start drawing</div>
             <div class="coordinate-readout"><span id="coordinate-readout">X 0.0 · Y 0.0 mm</span><span id="zoom-readout">8%</span></div>
           </div>
-          <footer class="statusbar"><span><i class="status-dot"></i> Ready</span><span id="snap-readout">SNAP: ON</span><span>UNITS: mm</span><span>WORLD: Y-UP</span><span id="entity-count">0 objects</span></footer>
+          <footer class="statusbar"><span><i class="status-dot"></i> Ready</span><span id="snap-readout">SNAP: ON</span><span id="ortho-readout">ORTHO: ON</span><span>UNITS: mm</span><span>WORLD: Y-UP</span><span id="entity-count">0 objects</span></footer>
         </main>
         <aside class="properties-panel">
           <div class="panel-heading">PROPERTIES <span>⋯</span></div>

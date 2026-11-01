@@ -299,15 +299,21 @@ button:focus-visible, a:focus-visible {
 .snap-guide {
   stroke: #5aa7ff;
   stroke-width: 1;
-  stroke-dasharray: 5 4;
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
   vector-effect: non-scaling-stroke;
-  opacity: .95;
+  opacity: 1;
+  filter: drop-shadow(0 0 2px #398cff66);
 }
 .snap-point {
   fill: #171b22;
   stroke: #83c1ff;
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
+}
+.snap-point.is-snapped {
+  fill: #83c1ff;
+  stroke: #d9ecff;
 }
 .preview-geometry {
   fill: none;
@@ -356,11 +362,17 @@ button:focus-visible, a:focus-visible {
 
 .dimension-label {
   fill: #b1d5ff;
-  font-size: 11px;
+  font-size: 140px;
+  font-variant-numeric: tabular-nums;
   paint-order: stroke;
   stroke: #171b22;
-  stroke-width: 3px;
+  stroke-width: 34px;
   stroke-linejoin: round;
+  pointer-events: none;
+}
+ .listening-dimension {
+  fill: #d5e8ff;
+  opacity: .92;
 }
 .selected-handle { fill: #fff; stroke: #438fff; stroke-width: 1; vector-effect: non-scaling-stroke; }
 
