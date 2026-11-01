@@ -364,7 +364,7 @@ fileInput.addEventListener("change",async()=>{
     const parsed=JSON.parse(await file.text()) as {units?:string;entities?:Entity[];layers?:DocumentModel["layers"];references?:ReferenceImage[]};
     if(parsed.units!=="mm"||!Array.isArray(parsed.entities)||!Array.isArray(parsed.layers))throw new Error("Unsupported project file");
     const references=parsed.references??[];
-    if(!Array.isArray(references)||references.some(reference=>!reference||typeof reference.id!=="string"||typeof reference.dataUrl!=="string"||!reference.dataUrl.startsWith("data:image/")||!Number.isFinite(reference.widthMm)||reference.widthMm<=0||!Number.isFinite(reference.pixelWidth)||reference.pixelWidth<=0||!Number.isFinite(reference.pixelHeight)||reference.pixelHeight<=0))throw new Error("Invalid reference image data");
+    if(!Array.isArray(references)||references.some(reference=>!reference||typeof reference.id!=="string"||typeof reference.dataUrl!=="string"||!(reference.dataUrl.startsWith("data:image/png;base64,")||reference.dataUrl.startsWith("data:image/jpeg;base64,"))||!Number.isFinite(reference.widthMm)||reference.widthMm<=0||!Number.isFinite(reference.pixelWidth)||reference.pixelWidth<=0||!Number.isFinite(reference.pixelHeight)||reference.pixelHeight<=0))throw new Error("Invalid reference image data");
     pushUndo(); model.entities.splice(0,model.entities.length,...parsed.entities);model.layers.splice(0,model.layers.length,...parsed.layers);model.references.splice(0,model.references.length,...references);
     nextId=model.entities.length+1;selectedId=null;selectedReferenceId=null;rebuildLayers();render();updateHistoryButtons();fitDrawing();updateHistoryButtons();
   } catch(error) { alert("Could not open project: "+(error instanceof Error?error.message:"Invalid JSON")); }
@@ -381,7 +381,7 @@ referenceFileInput.addEventListener("change",async()=>{
     const dimensions = await new Promise<{width:number;height:number}>((resolve,reject)=>{const image=new Image();image.onload=()=>resolve({width:image.naturalWidth,height:image.naturalHeight});image.onerror=()=>reject(new Error("Image could not be decoded"));image.src=dataUrl;});
     const anchor = (document.querySelector<HTMLSelectElement>("#reference-placement")?.value ?? "origin") as ReferenceImage["anchor"];
     pushUndo();
-    const reference: ReferenceImage = {id:"REF"+(model.references.length+1),name:file.name,dataUrl,pixelWidth:dimensions.width,pixelHeight:dimensions.height,widthMm:10000,position:{x:0,y:0},rotation:0,opacity:0.5,visible:true,locked:false,anchor};
+    let referenceNumber=model.references.length+1;while(model.references.some(item=>item.id==="REF"+referenceNumber))referenceNumber++;\n    const reference: ReferenceImage = {id:"REF"+referenceNumber,name:file.name,dataUrl,pixelWidth:dimensions.width,pixelHeight:dimensions.height,widthMm:10000,position:{x:0,y:0},rotation:0,opacity:0.5,visible:true,locked:false,anchor};
     model.references.push(reference);selectedReferenceId=reference.id;selectedId=null;render();fitDrawing();updateHistoryButtons();
   } catch(error) { alert("Could not attach reference: "+(error instanceof Error?error.message:"Invalid image")); }
   referenceFileInput.value="";
@@ -397,7 +397,7 @@ referenceContent.addEventListener("click",event=>{
 referenceContent.addEventListener("change",event=>{
   const target=event.target as HTMLInputElement|HTMLSelectElement;
   const reference=model.references.find(item=>item.id===selectedReferenceId);if(!reference)return;
-  if(target.id==="reference-anchor"||target.id==="reference-x"||target.id==="reference-y"||target.id==="reference-width"||target.id==="reference-rotation"||target.id==="reference-opacity"||target.id==="reference-visible"||target.id==="reference-locked")pushUndo();
+  if(target.id==="reference-anchor"||target.id==="reference-x"||target.id==="reference-y"||target.id==="reference-width"||target.id==="reference-rotation"||target.id==="reference-visible"||target.id==="reference-locked")pushUndo();
   if(target.id==="reference-anchor")reference.anchor=target.value as ReferenceImage["anchor"];
   if(target.id==="reference-x"&&Number.isFinite(Number(target.value)))reference.position.x=Number(target.value);
   if(target.id==="reference-y"&&Number.isFinite(Number(target.value)))reference.position.y=Number(target.value);
