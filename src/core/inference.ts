@@ -32,7 +32,7 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
     if(e.type==="grid") { const p=projectPointOnSegment(cursorWorld,ss[0]); if(distance(p,cursorWorld)<=tolerance) addSnap(snaps,"grid",p,e.id,cursorWorld,pxScale); }
     if(e.type==="circle") { const v=sub(cursorWorld,e.center), n=length(v); if(n>1e-9) addSnap(snaps,"nearest",add(e.center,scale(v,e.radius/n)),e.id,cursorWorld,pxScale); }
     if(e.type==="arc") {
-      const tau=2*Math.PI, sweep=((e.endAngle-e.startAngle)%tau+tau)%tau;
+      const tau=2*Math.PI, rawSweep=e.endAngle-e.startAngle, sweep=Math.abs(rawSweep)>=tau-1e-9 ? tau : ((rawSweep%tau)+tau)%tau;
       const arcStart=add(e.center,scale(fromAngle(e.startAngle),e.radius));
       const arcEnd=add(e.center,scale(fromAngle(e.endAngle),e.radius));
       const arcMid=add(e.center,scale(fromAngle(e.startAngle+sweep/2),e.radius));
