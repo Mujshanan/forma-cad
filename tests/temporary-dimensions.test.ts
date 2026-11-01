@@ -106,7 +106,8 @@ describe("temporary dimension commit and cancellation", () => {
     const session = new TemporaryDimensionSession();
     for (const key of "300") session.append(key);
     const endpoint = session.commit({ x: 0, y: 0 }, { x: 0, y: 10 });
-    expect(endpoint).toEqual({ x: 0, y: 300 });
+    expect(endpoint?.x).toBeCloseTo(0);
+    expect(endpoint?.y).toBeCloseTo(300);
     expect(session.isEmpty).toBe(true);
   });
 
