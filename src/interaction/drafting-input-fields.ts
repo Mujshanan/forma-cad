@@ -34,7 +34,7 @@ export class DraftingInputFields {
       return true;
     }
     // The suffix is descriptive only; the active Angle field already carries the value.
-    if (this.activeField === "angle" && (key === "e" || key === "g")) return true;
+    if (this.activeField === "angle" && (key === "d" || key === "e" || key === "g")) return true;
     if (!/^[0-9.+-]$/.test(character)) return false;
     const current = this.activeField === "length" ? this.lengthText : this.angleText;
     const next = current + character;
