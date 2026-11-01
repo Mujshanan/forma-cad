@@ -1,5 +1,5 @@
 import { createDocument, type Entity, type DocumentModel, type ReferenceImage } from "./core/model";
-import { referenceImageCorners, referenceImageHeight, referenceImageLocalOffset, referenceImageSvgTransform } from "./core/reference-image";
+import { calibrateReferenceImage, referenceImageCorners, referenceImageHeight, referenceImageLocalOffset, referenceImageNormalizedPoint, referenceImageSvgTransform } from "./core/reference-image";
 import type { Vec2 } from "./core/geometry";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import "./style.css";
@@ -27,6 +27,7 @@ let pointerWorld: Vec2 = { x: 0, y: 0 };
 let selectedId: string | null = null;
 let selectedReferenceId: string | null = null;
 let dragReference: { id: string; offset: Vec2 } | null = null;
+let calibrationPick: { referenceId: string; firstPoint: Vec2 | null; secondPoint: Vec2 | null; measuredDistance: number | null; error: string | null } | null = null;
 let snapEnabled = true;
 let gridVisible = false;
 let spaceDown = false;
@@ -43,7 +44,8 @@ function historyState(): HistoryState { return { entities: cloneEntities(), refe
 function pushUndo() { undoStack.push(historyState()); if (undoStack.length > 100) undoStack.shift(); redoStack.length = 0; }
 function restoreHistory(state: HistoryState) {
   model.entities.splice(0, model.entities.length, ...JSON.parse(JSON.stringify(state.entities)) as Entity[]);
-  selectedId = state.selectedId; nextId = state.nextId; firstPoint = null; dragEndpoint = null; render(); updateHistoryButtons();
+  model.references.splice(0, model.references.length, ...JSON.parse(JSON.stringify(state.references)) as ReferenceImage[]);
+  selectedId = state.selectedId; selectedReferenceId = state.selectedReferenceId; nextId = state.nextId; firstPoint = null; dragEndpoint = null; dragReference = null; calibrationPick = null; render(); updateHistoryButtons();
 }
 function undo() {
   if (!undoStack.length) return;
@@ -200,9 +202,22 @@ function renderReferencePanel() {
         <label><input id="reference-visible" type="checkbox" ${reference.visible ? "checked" : ""}> Visible</label>
         <label><input id="reference-locked" type="checkbox" ${reference.locked ? "checked" : ""}> Locked</label>
       </div>
+      <button type="button" id="calibrate-reference" class="reference-calibrate">Calibrate from two points</button>
       <button type="button" id="remove-reference" class="reference-remove">Remove reference</button>
       <p class="reference-hint">Drag the image on the canvas to move it. Width preserves its aspect ratio.</p>
     </div>`;
+  })() + (calibrationPick?.referenceId === selectedReferenceId ? (() => {
+    if (calibrationPick.secondPoint) {
+      return `<div class="calibration-editor">
+        <div class="calibration-title">TWO-POINT CALIBRATION</div>
+        <p>Measured distance on current image scale: <strong>${fmt(calibrationPick.measuredDistance ?? 0)} mm</strong></p>
+        <label>Known real distance (mm)<input id="calibration-distance" type="number" min="0.001" step="any" placeholder="e.g. 6000" autofocus></label>
+        ${calibrationPick.error ? `<p class="calibration-error">${escapeHtml(calibrationPick.error)}</p>` : ""}
+        <div class="calibration-actions"><button id="apply-calibration" type="button">Apply scale</button><button id="cancel-calibration" type="button">Cancel</button></div>
+      </div>`;
+    }
+    return `<div class="calibration-editor"><div class="calibration-title">TWO-POINT CALIBRATION</div><p>${calibrationPick.firstPoint ? "First point selected. Click the second endpoint of the known dimension." : "Click the first endpoint of a known dimension on the image."}</p><button id="cancel-calibration" type="button">Cancel calibration</button></div>`;
+  })() : "") + (!calibrationPick && reference.calibration ? `<p class="calibration-saved">Calibrated · known distance ${fmt(reference.calibration.actualDistanceMm)} mm</p>` : "");
   })();
 }
 function rebuildLayers() {
@@ -269,6 +284,23 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 svg.addEventListener("pointerdown", event => {
+  if (calibrationPick) {
+    const reference = model.references.find(item => item.id === calibrationPick!.referenceId);
+    if (!reference) { calibrationPick = null; render(); return; }
+    const point = toWorld(event);
+    if (!referenceImageNormalizedPoint(reference, point)) {
+      calibrationPick.error = "Pick a point inside the visible reference image.";
+      render(); event.preventDefault(); return;
+    }
+    if (!calibrationPick.firstPoint) {
+      calibrationPick.firstPoint = point; calibrationPick.error = null;
+    } else {
+      const measuredDistance = distance(calibrationPick.firstPoint, point);
+      if (measuredDistance <= 1e-6) calibrationPick.error = "Choose two different points.";
+      else { calibrationPick.secondPoint = point; calibrationPick.measuredDistance = measuredDistance; calibrationPick.error = null; }
+    }
+    render(); event.preventDefault(); return;
+  }
   const referenceElement = (event.target as Element | null)?.closest<SVGGElement>("[data-reference-id]");
   if (event.button === 0 && referenceElement && tool === "select") {
     const id = referenceElement.dataset.referenceId;
@@ -320,6 +352,7 @@ svg.addEventListener("wheel",event=>{
 window.addEventListener("keydown",event=>{
   if(isEditableTarget(event.target)) return;
   if(event.code==="Space"){spaceDown=true;svg.style.cursor="grab";}
+  if(event.key==="Escape" && calibrationPick){calibrationPick=null;render();return;}
   if(event.key==="Escape" && firstPoint){firstPoint=null;render();return;}
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
@@ -389,6 +422,28 @@ referenceFileInput.addEventListener("change",async()=>{
 });
 referenceContent.addEventListener("click",event=>{
   const target=event.target as HTMLElement;
+  if(target.id==="calibrate-reference"){
+    const reference=model.references.find(item=>item.id===selectedReferenceId);
+    if(reference){calibrationPick={referenceId:reference.id,firstPoint:null,secondPoint:null,measuredDistance:null,error:null};render();}
+    return;
+  }
+  if(target.id==="cancel-calibration"){calibrationPick=null;render();return;}
+  if(target.id==="apply-calibration"){
+    const reference=model.references.find(item=>item.id===selectedReferenceId);
+    const actualDistance=Number(referenceContent.querySelector<HTMLInputElement>("#calibration-distance")?.value);
+    if(reference&&calibrationPick?.firstPoint&&calibrationPick.secondPoint){
+      try {
+        const calibrated=calibrateReferenceImage(reference,calibrationPick.firstPoint,calibrationPick.secondPoint,actualDistance);
+        pushUndo();
+        Object.assign(reference,calibrated);
+        calibrationPick=null;render();updateHistoryButtons();fitDrawing();
+      } catch(error) {
+        calibrationPick.error=error instanceof Error?error.message:"Invalid calibration";
+        render();
+      }
+    }
+    return;
+  }
   const toggle=target.closest<HTMLElement>("[data-reference-toggle]");
   if(toggle){const reference=model.references.find(item=>item.id===toggle.dataset.referenceToggle);if(reference){pushUndo();reference.visible=!reference.visible;render();updateHistoryButtons();}return;}
   if(target.id==="remove-reference"){const index=model.references.findIndex(item=>item.id===selectedReferenceId);if(index>=0){pushUndo();model.references.splice(index,1);selectedReferenceId=null;render();updateHistoryButtons();}return;}
