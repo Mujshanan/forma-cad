@@ -1,5 +1,7 @@
 import { createDocument, type Entity, type DocumentModel, type ReferenceImage } from "./core/model";
 import { calibrateReferenceImage, referenceImageCorners, referenceImageHeight, referenceImageLocalOffset, referenceImageNormalizedPoint, referenceImageSvgTransform } from "./core/reference-image";
+import { detectRasterSegments } from "./core/raster-line-detection";
+import { snapToReferenceGeometry, type ReferenceSnapResult } from "./core/reference-snapping";
 import type { Vec2 } from "./core/geometry";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import "./style.css";
@@ -28,6 +30,7 @@ let selectedId: string | null = null;
 let selectedReferenceId: string | null = null;
 let dragReference: { id: string; offset: Vec2 } | null = null;
 let calibrationPick: { referenceId: string; firstPoint: Vec2 | null; secondPoint: Vec2 | null; measuredDistance: number | null; error: string | null } | null = null;
+let referenceSnapState: ReferenceSnapResult | null = null;
 let snapEnabled = true;
 let gridVisible = false;
 let spaceDown = false;
@@ -85,6 +88,9 @@ function snapPoint(point: Vec2): Vec2 {
       if (d <= bestDistance) { bestDistance = d; best = candidate; }
     }
   }
+  const referenceSnap = snapToReferenceGeometry(point, model.references, view.scale);
+  referenceSnapState = referenceSnap;
+  if (referenceSnap && (!best || referenceSnap.distancePx < bestDistance * view.scale)) return { ...referenceSnap.point };
   return best ? { ...best } : { ...point };
 }
 function entitySvg(entity: Entity): string {
@@ -133,8 +139,15 @@ function render() {
   overlayLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
   worldLayer.innerHTML = model.entities.map(entitySvg).join("");
   overlayLayer.innerHTML = "";
+  const snappedPointer = snapPoint(pointerWorld);
+  if (referenceSnapState?.guides.length) {
+    for (const guide of referenceSnapState.guides) {
+      const end = guide.axis === "horizontal" ? { x: pointerWorld.x, y: guide.coordinate } : { x: guide.coordinate, y: pointerWorld.y };
+      overlayLayer.insertAdjacentHTML("beforeend", `<line class="reference-snap-guide" x1="${guide.anchor.x}" y1="${-guide.anchor.y}" x2="${end.x}" y2="${-end.y}"/>`);
+    }
+  }
   if (firstPoint && tool !== "select") {
-    const end = snapPoint(pointerWorld);
+    const end = snappedPointer;
     if (tool === "line") {
       const dx=end.x-firstPoint.x, dy=end.y-firstPoint.y, length=Math.hypot(dx,dy), angle=(Math.atan2(dy,dx)*180/Math.PI+360)%360;
       overlayLayer.innerHTML = `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${end.x}" y2="${-end.y}"/><text class="dimension-label listening-dimension" x="${(firstPoint.x+end.x)/2}" y="${-(firstPoint.y+end.y)/2-150/view.scale}">L ${fmt(length)} mm · ${fmt(angle)}°</text>`;
@@ -159,7 +172,6 @@ function render() {
       `<circle class="endpoint-handle selected-handle" data-endpoint-handle="${selected.id}" data-endpoint="start" cx="${selected.start.x}" cy="${-selected.start.y}" r="${7 / view.scale}"/><circle class="endpoint-handle selected-handle" data-endpoint-handle="${selected.id}" data-endpoint="end" cx="${selected.end.x}" cy="${-selected.end.y}" r="${7 / view.scale}"/>`);
   }
   // Make a successful endpoint snap explicit rather than silently moving the cursor.
-  const snappedPointer = snapPoint(pointerWorld);
   if (distance(snappedPointer, pointerWorld) > 0.001) {
     overlayLayer.insertAdjacentHTML("beforeend",
       `<circle class="snap-point is-snapped" data-testid="snap-indicator" cx="${snappedPointer.x}" cy="${-snappedPointer.y}" r="${6 / view.scale}"/>`);
@@ -168,7 +180,7 @@ function render() {
   if (bg) bg.style.opacity = gridVisible ? "1" : "0";
   coordinateReadout.textContent = `X ${fmt(pointerWorld.x)} · Y ${fmt(pointerWorld.y)} mm`;
   zoomReadout.textContent = Math.round(view.scale*100)+"%";
-  snapReadout.textContent = snapEnabled ? "SNAP: ENDPOINTS" : "SNAP: OFF";
+  snapReadout.textContent = snapEnabled ? (model.references.some(reference => reference.visible && reference.detectedSegments?.length) ? "SNAP: ENDPOINTS + REFERENCES" : "SNAP: ENDPOINTS") : "SNAP: OFF";
   entityCount.textContent = model.entities.length + (model.entities.length === 1 ? " object" : " objects");
   renderProperties();
   renderReferencePanel();
@@ -206,6 +218,8 @@ function renderReferencePanel() {
       <label><input id="reference-locked" type="checkbox" ${reference.locked ? "checked" : ""}> Locked</label>
     </div>
     <button type="button" id="calibrate-reference" class="reference-calibrate">Calibrate from two points</button>
+    <button type="button" id="analyze-reference" class="reference-analyze" ${reference.calibration ? "" : "disabled"}>Analyze architectural linework</button>
+    ${reference.detectedSegments?.length ? `<p class="reference-analysis-status">${reference.detectedSegments.length} detected line segments · endpoint, intersection, midpoint and alignment snaps active</p>` : `<p class="reference-analysis-status">${reference.calibration ? "Analyze this calibrated image to enable reference snapping." : "Calibrate the image before analyzing its linework."}</p>`}
     <button type="button" id="remove-reference" class="reference-remove">Remove reference</button>
     <p class="reference-hint">Drag the image on the canvas to move it. Width preserves its aspect ratio.</p>
   </div>`;
@@ -431,6 +445,29 @@ referenceContent.addEventListener("click",event=>{
   if(target.id==="calibrate-reference"){
     const reference=model.references.find(item=>item.id===selectedReferenceId);
     if(reference){calibrationPick={referenceId:reference.id,firstPoint:null,secondPoint:null,measuredDistance:null,error:null};render();}
+    return;
+  }
+  if(target.id==="analyze-reference"){
+    const reference=model.references.find(item=>item.id===selectedReferenceId);
+    if(!reference?.calibration){return;}
+    const referenceId=reference.id;
+    const button=target as HTMLButtonElement;button.disabled=true;button.textContent="Analyzing…";
+    try {
+      const image=await new Promise<HTMLImageElement>((resolve,reject)=>{const element=new Image();element.onload=()=>resolve(element);element.onerror=()=>reject(new Error("Reference image could not be decoded"));element.src=reference.dataUrl;});
+      const factor=Math.min(1,1200/Math.max(image.naturalWidth,image.naturalHeight));
+      const width=Math.max(2,Math.round(image.naturalWidth*factor)),height=Math.max(2,Math.round(image.naturalHeight*factor));
+      const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+      const context=canvas.getContext("2d",{willReadFrequently:true});
+      if(!context)throw new Error("Canvas pixel access is unavailable");
+      context.drawImage(image,0,0,width,height);
+      const pixels=context.getImageData(0,0,width,height);
+      const segments=detectRasterSegments(pixels.data,width,height);
+      const current=model.references.find(item=>item.id===referenceId);
+      if(current){pushUndo();current.detectedSegments=segments;render();updateHistoryButtons();}
+    } catch(error) {
+      alert("Could not analyze reference linework: "+(error instanceof Error?error.message:"Unknown error"));
+      render();
+    }
     return;
   }
   if(target.id==="cancel-calibration"){calibrationPick=null;render();return;}
