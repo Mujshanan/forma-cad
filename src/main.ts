@@ -366,7 +366,7 @@ fileInput.addEventListener("change",async()=>{
     const references=parsed.references??[];
     if(!Array.isArray(references)||references.some(reference=>!reference||typeof reference.id!=="string"||typeof reference.dataUrl!=="string"||!(reference.dataUrl.startsWith("data:image/png;base64,")||reference.dataUrl.startsWith("data:image/jpeg;base64,"))||!Number.isFinite(reference.widthMm)||reference.widthMm<=0||!Number.isFinite(reference.pixelWidth)||reference.pixelWidth<=0||!Number.isFinite(reference.pixelHeight)||reference.pixelHeight<=0))throw new Error("Invalid reference image data");
     pushUndo(); model.entities.splice(0,model.entities.length,...parsed.entities);model.layers.splice(0,model.layers.length,...parsed.layers);model.references.splice(0,model.references.length,...references);
-    nextId=model.entities.length+1;selectedId=null;selectedReferenceId=null;rebuildLayers();render();updateHistoryButtons();fitDrawing();updateHistoryButtons();
+    nextId=model.entities.length+1;selectedId=null;selectedReferenceId=model.references[0]?.id??null;rebuildLayers();render();updateHistoryButtons();fitDrawing();updateHistoryButtons();
   } catch(error) { alert("Could not open project: "+(error instanceof Error?error.message:"Invalid JSON")); }
   fileInput.value="";
 });
