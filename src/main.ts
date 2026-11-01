@@ -178,47 +178,53 @@ function renderReferencePanel() {
     referenceContent.innerHTML = '<div class="reference-empty">No reference images attached.</div>';
     return;
   }
-  referenceContent.innerHTML = model.references.map(reference => {
+  const rows = model.references.map(reference => {
     const selected = reference.id === selectedReferenceId;
     return `<div class="reference-row ${selected ? "active" : ""}" data-reference-select="${reference.id}">
       <span class="reference-status">${reference.visible ? "◉" : "○"}</span>
       <span class="reference-name" title="${escapeHtml(reference.name)}">${escapeHtml(reference.name)}</span>
       <button type="button" class="reference-small-action" data-reference-toggle="${reference.id}" aria-label="${reference.visible ? "Hide" : "Show"} ${escapeHtml(reference.name)}">${reference.visible ? "Hide" : "Show"}</button>
     </div>`;
-  }).join("") + (() => {
-    const reference = model.references.find(item => item.id === selectedReferenceId);
-    if (!reference) return '<p class="reference-hint">Select a reference to adjust its placement and display.</p>';
-    return `<div class="reference-editor">
-      <div class="reference-editor-title">PLACEMENT · ${escapeHtml(reference.name)}</div>
-      <label>Anchor<select id="reference-anchor"><option value="origin" ${reference.anchor === "origin" ? "selected" : ""}>Origin to origin</option><option value="center" ${reference.anchor === "center" ? "selected" : ""}>Center to center</option></select></label>
-      <div class="reference-field-grid">
-        <label>X (mm)<input id="reference-x" type="number" step="any" value="${reference.position.x}"></label>
-        <label>Y (mm)<input id="reference-y" type="number" step="any" value="${reference.position.y}"></label>
-        <label>Width (mm)<input id="reference-width" type="number" min="0.001" step="any" value="${reference.widthMm}"></label>
-        <label>Rotation (°)<input id="reference-rotation" type="number" step="any" value="${reference.rotation}"></label>
-      </div>
-      <label class="reference-opacity-label">Opacity <output id="reference-opacity-value">${Math.round(reference.opacity * 100)}%</output><input id="reference-opacity" type="range" min="0" max="100" value="${Math.round(reference.opacity * 100)}"></label>
-      <div class="reference-toggle-row">
-        <label><input id="reference-visible" type="checkbox" ${reference.visible ? "checked" : ""}> Visible</label>
-        <label><input id="reference-locked" type="checkbox" ${reference.locked ? "checked" : ""}> Locked</label>
-      </div>
-      <button type="button" id="calibrate-reference" class="reference-calibrate">Calibrate from two points</button>
-      <button type="button" id="remove-reference" class="reference-remove">Remove reference</button>
-      <p class="reference-hint">Drag the image on the canvas to move it. Width preserves its aspect ratio.</p>
-    </div>`;
-  })() + (calibrationPick?.referenceId === selectedReferenceId ? (() => {
+  }).join("");
+  const reference = model.references.find(item => item.id === selectedReferenceId);
+  if (!reference) {
+    referenceContent.innerHTML = rows + '<p class="reference-hint">Select a reference to adjust its placement and display.</p>';
+    return;
+  }
+  let editor = `<div class="reference-editor">
+    <div class="reference-editor-title">PLACEMENT · ${escapeHtml(reference.name)}</div>
+    <label>Anchor<select id="reference-anchor"><option value="origin" ${reference.anchor === "origin" ? "selected" : ""}>Origin to origin</option><option value="center" ${reference.anchor === "center" ? "selected" : ""}>Center to center</option></select></label>
+    <div class="reference-field-grid">
+      <label>X (mm)<input id="reference-x" type="number" step="any" value="${reference.position.x}"></label>
+      <label>Y (mm)<input id="reference-y" type="number" step="any" value="${reference.position.y}"></label>
+      <label>Width (mm)<input id="reference-width" type="number" min="0.001" step="any" value="${reference.widthMm}"></label>
+      <label>Rotation (°)<input id="reference-rotation" type="number" step="any" value="${reference.rotation}"></label>
+    </div>
+    <label class="reference-opacity-label">Opacity <output id="reference-opacity-value">${Math.round(reference.opacity * 100)}%</output><input id="reference-opacity" type="range" min="0" max="100" value="${Math.round(reference.opacity * 100)}"></label>
+    <div class="reference-toggle-row">
+      <label><input id="reference-visible" type="checkbox" ${reference.visible ? "checked" : ""}> Visible</label>
+      <label><input id="reference-locked" type="checkbox" ${reference.locked ? "checked" : ""}> Locked</label>
+    </div>
+    <button type="button" id="calibrate-reference" class="reference-calibrate">Calibrate from two points</button>
+    <button type="button" id="remove-reference" class="reference-remove">Remove reference</button>
+    <p class="reference-hint">Drag the image on the canvas to move it. Width preserves its aspect ratio.</p>
+  </div>`;
+  if (calibrationPick?.referenceId === reference.id) {
     if (calibrationPick.secondPoint) {
-      return `<div class="calibration-editor">
+      editor += `<div class="calibration-editor">
         <div class="calibration-title">TWO-POINT CALIBRATION</div>
         <p>Measured distance on current image scale: <strong>${fmt(calibrationPick.measuredDistance ?? 0)} mm</strong></p>
-        <label>Known real distance (mm)<input id="calibration-distance" type="number" min="0.001" step="any" placeholder="e.g. 6000" autofocus></label>
+        <label>Known real distance (mm)<input id="calibration-distance" type="number" min="0.001" step="any" placeholder="e.g. 6000"></label>
         ${calibrationPick.error ? `<p class="calibration-error">${escapeHtml(calibrationPick.error)}</p>` : ""}
         <div class="calibration-actions"><button id="apply-calibration" type="button">Apply scale</button><button id="cancel-calibration" type="button">Cancel</button></div>
       </div>`;
+    } else {
+      editor += `<div class="calibration-editor"><div class="calibration-title">TWO-POINT CALIBRATION</div><p>${calibrationPick.firstPoint ? "First point selected. Click the second endpoint of the known dimension." : "Click the first endpoint of a known dimension on the image."}</p><button id="cancel-calibration" type="button">Cancel calibration</button></div>`;
     }
-    return `<div class="calibration-editor"><div class="calibration-title">TWO-POINT CALIBRATION</div><p>${calibrationPick.firstPoint ? "First point selected. Click the second endpoint of the known dimension." : "Click the first endpoint of a known dimension on the image."}</p><button id="cancel-calibration" type="button">Cancel calibration</button></div>`;
-  })() : "") + (!calibrationPick && reference.calibration ? `<p class="calibration-saved">Calibrated · known distance ${fmt(reference.calibration.actualDistanceMm)} mm</p>` : "");
-  })();
+  } else if (reference.calibration) {
+    editor += `<p class="calibration-saved">Calibrated · known distance ${fmt(reference.calibration.actualDistanceMm)} mm</p>`;
+  }
+  referenceContent.innerHTML = rows + editor;
 }
 function rebuildLayers() {
   layerList.innerHTML = model.layers.map(layer=>`<div class="layer-row"><span class="layer-swatch" style="background:${layer.color}"></span><span>${escapeHtml(layer.name)}</span></div>`).join("");
