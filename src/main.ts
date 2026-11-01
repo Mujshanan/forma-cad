@@ -178,7 +178,7 @@ svg.addEventListener("pointerdown",event=>{
   pointerWorld = point;
   if(tool==="select") { nearestSelection(point); return; }
   const inferred=inferAt(point);
-  const endpoint = firstPoint ? draftSession.resolve(firstPoint, inferred.point) : inferred.point;
+  const endpoint = firstPoint ? draftSession.commit(firstPoint, inferred.point) : inferred.point;
   if (endpoint === null) { render(); return; }
   commitAt(endpoint);
   if(firstPoint) preview=inferAt(pointerWorld);
@@ -206,7 +206,7 @@ window.addEventListener("keydown",event=>{
   if(event.key==="Escape"){if(firstPoint||!draftSession.isEmpty){firstPoint=null;preview=null;draftSession.clear();previousSnap=undefined;render();}return;}
   if(event.key==="Enter" && firstPoint && preview){
     event.preventDefault();
-    const endpoint=draftSession.resolve(firstPoint,preview.point);
+    const endpoint=draftSession.commit(firstPoint,preview.point);
     if(endpoint===null){render();return;}
     commitAt(endpoint);return;
   }
