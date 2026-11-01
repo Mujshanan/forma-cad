@@ -1,10 +1,12 @@
-import { createDocument, type Entity, type DocumentModel } from "./core/model";
+import { createDocument, type Entity, type DocumentModel, type ReferenceImage } from "./core/model";
+import { referenceImageCorners, referenceImageHeight, referenceImageLocalOffset, referenceImageSvgTransform } from "./core/reference-image";
 import type { Vec2 } from "./core/geometry";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import "./style.css";
 
 type Tool = "select" | "line" | "circle" | "column";
 const svg = document.querySelector<SVGSVGElement>("#drawing-canvas")!;
+const referenceLayer = document.querySelector<SVGGElement>("#reference-layer")!;
 const worldLayer = document.querySelector<SVGGElement>("#world-layer")!;
 const overlayLayer = document.querySelector<SVGGElement>("#overlay-layer")!;
 const toolName = document.querySelector<HTMLElement>("#active-tool-name")!;
@@ -15,12 +17,16 @@ const entityCount = document.querySelector<HTMLElement>("#entity-count")!;
 const properties = document.querySelector<HTMLElement>("#properties-content")!;
 const layerList = document.querySelector<HTMLElement>("#layer-list")!;
 const snapReadout = document.querySelector<HTMLElement>("#snap-readout")!;
+const referenceContent = document.querySelector<HTMLElement>("#reference-content")!;
+const referenceFileInput = document.querySelector<HTMLInputElement>("#reference-file-input")!;
 const model: DocumentModel = createDocument();
 let view: ViewTransform = { origin: { x: 0, y: 0 }, scale: 0.08 };
 let tool: Tool = "select";
 let firstPoint: Vec2 | null = null;
 let pointerWorld: Vec2 = { x: 0, y: 0 };
 let selectedId: string | null = null;
+let selectedReferenceId: string | null = null;
+let dragReference: { id: string; offset: Vec2 } | null = null;
 let snapEnabled = true;
 let gridVisible = false;
 let spaceDown = false;
@@ -29,11 +35,11 @@ let panStart: Vec2 | null = null;
 let viewStart: Vec2 | null = null;
 let nextId = 1;
 let dragEndpoint: { id: string; endpoint: "start" | "end" } | null = null;
-type HistoryState = { entities: Entity[]; selectedId: string | null; nextId: number };
+type HistoryState = { entities: Entity[]; references: ReferenceImage[]; selectedId: string | null; selectedReferenceId: string | null; nextId: number };
 const undoStack: HistoryState[] = [];
 const redoStack: HistoryState[] = [];
 const cloneEntities = () => JSON.parse(JSON.stringify(model.entities)) as Entity[];
-function historyState(): HistoryState { return { entities: cloneEntities(), selectedId, nextId }; }
+function historyState(): HistoryState { return { entities: cloneEntities(), references: JSON.parse(JSON.stringify(model.references)) as ReferenceImage[], selectedId, selectedReferenceId, nextId }; }
 function pushUndo() { undoStack.push(historyState()); if (undoStack.length > 100) undoStack.shift(); redoStack.length = 0; }
 function restoreHistory(state: HistoryState) {
   model.entities.splice(0, model.entities.length, ...JSON.parse(JSON.stringify(state.entities)) as Entity[]);
@@ -116,7 +122,7 @@ function renderProperties() {
   properties.innerHTML = `<div class="property-label">OBJECT</div><div class="property-value">${escapeHtml(entity.id)} · ${escapeHtml(entity.layer)}</div>` + values.map(([label,value])=>`<div class="property-label">${label.toUpperCase()}</div><div class="property-value">${escapeHtml(value)}</div>`).join("");
 }
 function render() {
-  worldLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
+  referenceLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);\n  referenceLayer.innerHTML = model.references.filter(reference => reference.visible).map(reference => {\n    const offset = referenceImageLocalOffset(reference);\n    return `<g data-reference-id="${reference.id}" transform="${referenceImageSvgTransform(reference)}" opacity="${reference.opacity}"><image href="${reference.dataUrl}" x="${offset.x}" y="${offset.y}" width="${reference.widthMm}" height="${referenceImageHeight(reference)}" preserveAspectRatio="none" pointer-events="${reference.locked ? "none" : "all"}"/></g>`;\n  }).join("");\n  worldLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
   overlayLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
   worldLayer.innerHTML = model.entities.map(entitySvg).join("");
   overlayLayer.innerHTML = "";
@@ -159,6 +165,40 @@ function render() {
   entityCount.textContent = model.entities.length + (model.entities.length === 1 ? " object" : " objects");
   renderProperties();
 }
+function renderReferencePanel() {
+  if (!model.references.length) {
+    referenceContent.innerHTML = '<div class="reference-empty">No reference images attached.</div>';
+    return;
+  }
+  referenceContent.innerHTML = model.references.map(reference => {
+    const selected = reference.id === selectedReferenceId;
+    return `<div class="reference-row ${selected ? "active" : ""}" data-reference-select="${reference.id}">
+      <span class="reference-status">${reference.visible ? "◉" : "○"}</span>
+      <span class="reference-name" title="${escapeHtml(reference.name)}">${escapeHtml(reference.name)}</span>
+      <button type="button" class="reference-small-action" data-reference-toggle="${reference.id}" aria-label="${reference.visible ? "Hide" : "Show"} ${escapeHtml(reference.name)}">${reference.visible ? "Hide" : "Show"}</button>
+    </div>`;
+  }).join("") + (() => {
+    const reference = model.references.find(item => item.id === selectedReferenceId);
+    if (!reference) return '<p class="reference-hint">Select a reference to adjust its placement and display.</p>';
+    return `<div class="reference-editor">
+      <div class="reference-editor-title">PLACEMENT · ${escapeHtml(reference.name)}</div>
+      <label>Anchor<select id="reference-anchor"><option value="origin" ${reference.anchor === "origin" ? "selected" : ""}>Origin to origin</option><option value="center" ${reference.anchor === "center" ? "selected" : ""}>Center to center</option></select></label>
+      <div class="reference-field-grid">
+        <label>X (mm)<input id="reference-x" type="number" step="any" value="${reference.position.x}"></label>
+        <label>Y (mm)<input id="reference-y" type="number" step="any" value="${reference.position.y}"></label>
+        <label>Width (mm)<input id="reference-width" type="number" min="0.001" step="any" value="${reference.widthMm}"></label>
+        <label>Rotation (°)<input id="reference-rotation" type="number" step="any" value="${reference.rotation}"></label>
+      </div>
+      <label class="reference-opacity-label">Opacity <output id="reference-opacity-value">${Math.round(reference.opacity * 100)}%</output><input id="reference-opacity" type="range" min="0" max="100" value="${Math.round(reference.opacity * 100)}"></label>
+      <div class="reference-toggle-row">
+        <label><input id="reference-visible" type="checkbox" ${reference.visible ? "checked" : ""}> Visible</label>
+        <label><input id="reference-locked" type="checkbox" ${reference.locked ? "checked" : ""}> Locked</label>
+      </div>
+      <button type="button" id="remove-reference" class="reference-remove">Remove reference</button>
+      <p class="reference-hint">Drag the image on the canvas to move it. Width preserves its aspect ratio.</p>
+    </div>`;
+  })();
+}
 function rebuildLayers() {
   layerList.innerHTML = model.layers.map(layer=>`<div class="layer-row"><span class="layer-swatch" style="background:${layer.color}"></span><span>${escapeHtml(layer.name)}</span></div>`).join("");
 }
@@ -196,7 +236,7 @@ function fitDrawing() {
     else if (entity.type==="column") points.push({x:entity.center.x-entity.width/2,y:entity.center.y-entity.height/2},{x:entity.center.x+entity.width/2,y:entity.center.y+entity.height/2});
     else if (entity.type==="circle") points.push({x:entity.center.x-entity.radius,y:entity.center.y-entity.radius},{x:entity.center.x+entity.radius,y:entity.center.y+entity.radius});
   }
-  if (!points.length) return;
+  if (!points.length) { view={origin:{x:rect.width/2,y:rect.height/2},scale:0.08}; render(); return; }
   const minX=Math.min(...points.map(p=>p.x)), maxX=Math.max(...points.map(p=>p.x)), minY=Math.min(...points.map(p=>p.y)), maxY=Math.max(...points.map(p=>p.y));
   const width=Math.max(maxX-minX,1000), height=Math.max(maxY-minY,1000);
   view.scale=Math.min(2,Math.max(0.005,Math.min((rect.width-100)/width,(rect.height-100)/height)));
@@ -222,6 +262,19 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 svg.addEventListener("pointerdown", event => {
+  const referenceElement = (event.target as Element | null)?.closest<SVGGElement>("[data-reference-id]");
+  if (event.button === 0 && referenceElement && tool === "select") {
+    const id = referenceElement.dataset.referenceId;
+    const reference = model.references.find(item => item.id === id);
+    if (reference) {
+      selectedReferenceId = reference.id; selectedId = null;
+      if (!reference.locked) {
+        pushUndo(); dragReference = { id: reference.id, offset: { x: reference.position.x - toWorld(event).x, y: reference.position.y - toWorld(event).y } };
+        svg.setPointerCapture(event.pointerId);
+      }
+      render(); event.preventDefault(); return;
+    }
+  }
   const handle = (event.target as Element | null)?.closest<SVGCircleElement>(".endpoint-handle");
   if (event.button === 0 && handle) {
     const id = handle.dataset.endpointHandle;
@@ -238,6 +291,11 @@ svg.addEventListener("pointerdown", event => {
   commitShape(snapPoint(raw));
 });
 svg.addEventListener("pointermove", event => {
+  if (dragReference) {
+    const reference = model.references.find(item => item.id === dragReference!.id);
+    if (reference) { const point = toWorld(event); reference.position = { x: point.x + dragReference.offset.x, y: point.y + dragReference.offset.y }; }
+    pointerWorld = toWorld(event); render(); return;
+  }
   if (dragEndpoint) {
     const entity = model.entities.find(item => item.id === dragEndpoint!.id);
     if (entity && "start" in entity && "end" in entity) entity[dragEndpoint.endpoint] = toWorld(event);
@@ -248,7 +306,7 @@ svg.addEventListener("pointermove", event => {
   }
   pointerWorld=toWorld(event); render();
 });
-svg.addEventListener("pointerup",()=>{panning=false;panStart=null;viewStart=null;dragEndpoint=null;updateHistoryButtons();});
+svg.addEventListener("pointerup",()=>{panning=false;panStart=null;viewStart=null;dragEndpoint=null;dragReference=null;updateHistoryButtons();});
 svg.addEventListener("wheel",event=>{
   event.preventDefault(); view=zoomAt(view,screenPoint(event as unknown as PointerEvent),event.deltaY<0?1.12:1/1.12); render();
 },{passive:false});
@@ -284,11 +342,11 @@ document.querySelector("#toggle-grid")?.addEventListener("click",event=>{
 });
 document.querySelector("#new-project")?.addEventListener("click",()=>{
   if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;
-  pushUndo(); model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;render();updateHistoryButtons();
+  pushUndo(); model.entities.length=0;model.references.length=0;nextId=1;selectedId=null;selectedReferenceId=null;firstPoint=null;render();updateHistoryButtons();
 });
 document.querySelector("#zoom-fit")?.addEventListener("click",fitDrawing);
 document.querySelector("#save-project")?.addEventListener("click",()=>{
-  const blob=new Blob([JSON.stringify({version:1,...model},null,2)],{type:"application/json"});
+  const blob=new Blob([JSON.stringify({version:2,...model},null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="forma-cad-project.json";a.click();URL.revokeObjectURL(url);
 });
 const fileInput=document.querySelector<HTMLInputElement>("#file-input")!;
@@ -299,10 +357,51 @@ fileInput.addEventListener("change",async()=>{
     const parsed=JSON.parse(await file.text()) as {units?:string;entities?:Entity[];layers?:DocumentModel["layers"]};
     if(parsed.units!=="mm"||!Array.isArray(parsed.entities)||!Array.isArray(parsed.layers))throw new Error("Unsupported project file");
     pushUndo(); model.entities.splice(0,model.entities.length,...parsed.entities);model.layers.splice(0,model.layers.length,...parsed.layers);
-    nextId=model.entities.length+1;selectedId=null;rebuildLayers();render();updateHistoryButtons();fitDrawing();updateHistoryButtons();
+    nextId=model.entities.length+1;selectedId=null;selectedReferenceId=null;rebuildLayers();render();updateHistoryButtons();fitDrawing();updateHistoryButtons();
   } catch(error) { alert("Could not open project: "+(error instanceof Error?error.message:"Invalid JSON")); }
   fileInput.value="";
 });
 document.querySelector("#zoom-fit")?.addEventListener("dblclick",fitDrawing);
+document.querySelector("#attach-reference")?.addEventListener("click",()=>referenceFileInput.click());
+referenceFileInput.addEventListener("change",async()=>{
+  const file=referenceFileInput.files?.[0]; if(!file)return;
+  if (!file.type.startsWith("image/") || !["image/png","image/jpeg"].includes(file.type)) { alert("Choose a PNG or JPG image."); referenceFileInput.value=""; return; }
+  if (file.size > 20 * 1024 * 1024) { alert("Reference images must be 20 MB or smaller."); referenceFileInput.value=""; return; }
+  try {
+    const dataUrl = await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>typeof reader.result==="string"?resolve(reader.result):reject(new Error("Could not read image"));reader.onerror=()=>reject(new Error("Could not read image"));reader.readAsDataURL(file);});
+    const dimensions = await new Promise<{width:number;height:number}>((resolve,reject)=>{const image=new Image();image.onload=()=>resolve({width:image.naturalWidth,height:image.naturalHeight});image.onerror=()=>reject(new Error("Image could not be decoded"));image.src=dataUrl;});
+    const anchor = (document.querySelector<HTMLSelectElement>("#reference-placement")?.value ?? "origin") as ReferenceImage["anchor"];
+    pushUndo();
+    const reference: ReferenceImage = {id:"REF"+(model.references.length+1),name:file.name,dataUrl,pixelWidth:dimensions.width,pixelHeight:dimensions.height,widthMm:10000,position:{x:0,y:0},rotation:0,opacity:0.5,visible:true,locked:false,anchor};
+    model.references.push(reference);selectedReferenceId=reference.id;selectedId=null;render();fitDrawing();updateHistoryButtons();
+  } catch(error) { alert("Could not attach reference: "+(error instanceof Error?error.message:"Invalid image")); }
+  referenceFileInput.value="";
+});
+referenceContent.addEventListener("click",event=>{
+  const target=event.target as HTMLElement;
+  const toggle=target.closest<HTMLElement>("[data-reference-toggle]");
+  if(toggle){const reference=model.references.find(item=>item.id===toggle.dataset.referenceToggle);if(reference){pushUndo();reference.visible=!reference.visible;render();updateHistoryButtons();}return;}
+  if(target.id==="remove-reference"){const index=model.references.findIndex(item=>item.id===selectedReferenceId);if(index>=0){pushUndo();model.references.splice(index,1);selectedReferenceId=null;render();updateHistoryButtons();}return;}
+  const row=target.closest<HTMLElement>("[data-reference-select]");
+  if(row){selectedReferenceId=row.dataset.referenceSelect??null;selectedId=null;render();}
+});
+referenceContent.addEventListener("change",event=>{
+  const target=event.target as HTMLInputElement|HTMLSelectElement;
+  const reference=model.references.find(item=>item.id===selectedReferenceId);if(!reference)return;
+  if(target.id==="reference-anchor"||target.id==="reference-x"||target.id==="reference-y"||target.id==="reference-width"||target.id==="reference-rotation"||target.id==="reference-opacity"||target.id==="reference-visible"||target.id==="reference-locked")pushUndo();
+  if(target.id==="reference-anchor")reference.anchor=target.value as ReferenceImage["anchor"];
+  if(target.id==="reference-x")reference.position.x=Number(target.value);
+  if(target.id==="reference-y")reference.position.y=Number(target.value);
+  if(target.id==="reference-width"&&Number(target.value)>0)reference.widthMm=Number(target.value);
+  if(target.id==="reference-rotation")reference.rotation=Number(target.value)||0;
+  if(target.id==="reference-opacity")reference.opacity=Math.max(0,Math.min(1,Number(target.value)/100));
+  if(target.id==="reference-visible")reference.visible=(target as HTMLInputElement).checked;
+  if(target.id==="reference-locked")reference.locked=(target as HTMLInputElement).checked;
+  render();updateHistoryButtons();
+});
+referenceContent.addEventListener("input",event=>{
+  const target=event.target as HTMLInputElement;
+  if(target.id==="reference-opacity"){const output=referenceContent.querySelector<HTMLOutputElement>("#reference-opacity-value");if(output)output.value=target.value+"%";}
+});
 const resizeObserver=new ResizeObserver(()=>render());resizeObserver.observe(svg);
 rebuildLayers();render();
