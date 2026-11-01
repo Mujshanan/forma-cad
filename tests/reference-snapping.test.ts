@@ -38,13 +38,13 @@ describe("calibrated raster reference snapping", () => {
 
   it("provides horizontal and vertical alignment guides without forcing a snap", () => {
     const ref = reference([
-      { start: { x: 0.1, y: 0.5 }, end: { x: 0.9, y: 0.5 } },
-      { start: { x: 0.5, y: 0.1 }, end: { x: 0.5, y: 0.9 } },
+      { start: { x: 0.1, y: 0.5 }, end: { x: 0.4, y: 0.5 } },
+      { start: { x: 0.5, y: 0.1 }, end: { x: 0.5, y: 0.4 } },
     ]);
     const horizontal = snapToReferenceGeometry({ x: 3000, y: -4990 }, [ref], 0.08);
     expect(horizontal?.kind).toBe("horizontal");
     expect(horizontal?.guides).toHaveLength(1);
-    const dual = snapToReferenceGeometry({ x: 5010, y: -3000 }, [ref], 0.08);
+    const dual = snapToReferenceGeometry({ x: 5010, y: -4990 }, [ref], 0.08);
     expect(dual?.guides).toHaveLength(2);
     expect(dual?.point).toEqual({ x: 5000, y: -5000 });
   });
