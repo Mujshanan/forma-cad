@@ -100,3 +100,27 @@ describe("temporary dimension keyboard session", () => {
     expect(session.isEmpty).toBe(true);
   });
 });
+
+  it("commits the exact preview point and resets the input session", () => {
+    const session = new TemporaryDimensionSession();
+    for (const key of "300") session.append(key);
+    const endpoint = session.commit({ x: 0, y: 0 }, { x: 0, y: 10 });
+    expect(endpoint).toEqual({ x: 0, y: 300 });
+    expect(session.isEmpty).toBe(true);
+  });
+
+  it("does not commit invalid input and keeps it editable", () => {
+    const session = new TemporaryDimensionSession();
+    for (const key of "300<") session.append(key);
+    expect(session.commit({ x: 0, y: 0 }, { x: 0, y: 10 })).toBeNull();
+    expect(session.isEmpty).toBe(false);
+    expect(session.isValid).toBe(false);
+  });
+
+  it("cancels an in-progress typed segment by clearing its session", () => {
+    const session = new TemporaryDimensionSession();
+    for (const key of "@500<30") session.append(key);
+    session.clear();
+    expect(session.isEmpty).toBe(true);
+    expect(session.resolve({ x: 0, y: 0 }, { x: 20, y: 0 })).toEqual({ x: 20, y: 0 });
+  });
