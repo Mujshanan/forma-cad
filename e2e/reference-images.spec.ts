@@ -31,3 +31,25 @@ test("reference image placement, scale, opacity, visibility and lock controls wo
   await page.locator("#reference-locked").check();
   await expect(page.locator("#reference-layer image")).toHaveAttribute("pointer-events", "none");
 });
+
+test("saved project JSON preserves reference image placement and display settings", async ({ page }) => {
+  await page.goto("/");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/n7sAAAAASUVORK5CYII=", "base64");
+  await page.locator("#reference-file-input").setInputFiles({ name: "plan.png", mimeType: "image/png", buffer: png });
+  await page.locator("#reference-x").fill("1250");
+  await page.locator("#reference-x").dispatchEvent("change");
+  await page.locator("#reference-width").fill("8400");
+  await page.locator("#reference-width").dispatchEvent("change");
+  await page.locator("#reference-opacity").fill("35");
+  await page.locator("#reference-opacity").dispatchEvent("change");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator("#save-project").click();
+  const download = await downloadPromise;
+  const path = await download.path();
+  if (!path) throw new Error("Project download was not created");
+  await page.locator("#file-input").setInputFiles(path);
+  await expect(page.locator("#reference-x")).toHaveValue("1250");
+  await expect(page.locator("#reference-width")).toHaveValue("8400");
+  await expect(page.locator("#reference-opacity")).toHaveValue("35");
+});
