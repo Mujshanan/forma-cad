@@ -76,3 +76,52 @@ test("Escape cancels a line preview without creating geometry", async ({ page })
   await expect(page.locator(".listening-dimension")).toHaveCount(0);
   await expect(page.locator("#world-layer line.entity")).toHaveCount(0);
 });
+
+test("endpoint snap is visibly marked while drawing", async ({ page }) => {
+  await page.getByRole("button", { name: /Line/ }).click();
+  const a = await canvasPoint(page, 180, 160);
+  const b = await canvasPoint(page, 430, 260);
+  await page.mouse.click(a.x, a.y);
+  await page.mouse.click(b.x, b.y);
+
+  const c = await canvasPoint(page, 220, 280);
+  const nearA = await canvasPoint(page, 184, 163);
+  await page.mouse.click(c.x, c.y);
+  await page.mouse.move(nearA.x, nearA.y);
+  await expect(page.locator(".snap-point.is-snapped")).toBeVisible();
+});
+
+test("endpoint handles edit geometry and undo/redo restores changes", async ({ page }) => {
+  await page.getByRole("button", { name: /Line/ }).click();
+  const a = await canvasPoint(page, 180, 160);
+  const b = await canvasPoint(page, 430, 260);
+  await page.mouse.click(a.x, a.y);
+  await page.mouse.click(b.x, b.y);
+
+  const line = page.locator("#world-layer line.entity").first();
+  await expect(page.locator(".endpoint-handle")).toHaveCount(2);
+  const originalX2 = await line.getAttribute("x2");
+  const originalY2 = await line.getAttribute("y2");
+  const handle = page.locator('.endpoint-handle[data-endpoint="end"]');
+  const handleBox = await handle.boundingBox();
+  if (!handleBox) throw new Error("Endpoint handle is not visible");
+  const moved = await canvasPoint(page, 520, 330);
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(moved.x, moved.y);
+  await page.mouse.up();
+  await expect(line).not.toHaveAttribute("x2", originalX2!);
+  await expect(line).not.toHaveAttribute("y2", originalY2!);
+
+  await page.keyboard.press("Control+z");
+  await expect(line).toHaveAttribute("x2", originalX2!);
+  await expect(line).toHaveAttribute("y2", originalY2!);
+  await page.keyboard.press("Control+y");
+  await expect(line).not.toHaveAttribute("x2", originalX2!);
+
+  await page.keyboard.press("Control+z");
+  await page.keyboard.press("Control+z");
+  await expect(page.locator("#world-layer line.entity")).toHaveCount(0);
+  await page.keyboard.press("Control+y");
+  await expect(page.locator("#world-layer line.entity")).toHaveCount(1);
+});
