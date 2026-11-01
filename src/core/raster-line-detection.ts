@@ -72,16 +72,16 @@ export function detectRasterSegments(
     if (inliers.length < Math.max(10, threshold)) continue;
     let start = inliers[0], previous = start;
     const ranges: [number, number][] = [];
-    for (let i = 1; i <= inliers.length; i++) {
+    for (let i = 1; i < inliers.length; i++) {
       const value = inliers[i];
-      if (value === undefined || value - previous > 9) {
+      if (value - previous > 9) {
         if (previous - start >= minLength) ranges.push([start, previous]);
         start = value;
       }
       previous = value;
     }
+    if (previous - start >= minLength) ranges.push([start, previous]);
     for (const [a, b] of ranges) {
-      const midpoint = (a + b) / 2;
       const origin = { x: c * peak.rho, y: s * peak.rho };
       const p1 = { x: origin.x + direction.x * a, y: origin.y + direction.y * a };
       const p2 = { x: origin.x + direction.x * b, y: origin.y + direction.y * b };
