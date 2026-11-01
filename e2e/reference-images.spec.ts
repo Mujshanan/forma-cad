@@ -62,3 +62,42 @@ test("saved project JSON preserves reference image placement and display setting
   await expect(page.locator("#reference-width")).toHaveValue("8400");
   await expect(page.locator("#reference-opacity")).toHaveValue("35");
 });
+
+
+test("two-point calibration scales the image and survives undo, redo and save/load", async ({ page }) => {
+  await page.goto("/");
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAYAAAD0In+KAAAADElEQVQImWP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC", "base64");
+  await page.locator("#reference-file-input").setInputFiles({
+    name: "calibration-plan.png", mimeType: "image/png", buffer: png,
+  });
+  await page.locator("#calibrate-reference").click();
+
+  const image = page.locator("#reference-layer image");
+  const bounds = await image.boundingBox();
+  if (!bounds) throw new Error("Reference image is not visible");
+  const pickY = bounds.y + bounds.height * 0.5;
+  await page.mouse.click(bounds.x + bounds.width * 0.1, pickY);
+  await page.mouse.click(bounds.x + bounds.width * 0.9, pickY);
+
+  await expect(page.locator("#calibration-distance")).toBeVisible();
+  await expect(page.locator(".calibration-editor")).toContainText("Measured distance on current image scale");
+  await page.locator("#calibration-distance").fill("6000");
+  await page.locator("#apply-calibration").click();
+
+  await expect(page.locator("#reference-width")).toHaveValue("7500");
+  await expect(page.locator(".calibration-saved")).toContainText("6000");
+
+  await page.locator("#undo-action").click();
+  await expect(page.locator("#reference-width")).toHaveValue("10000");
+  await page.locator("#redo-action").click();
+  await expect(page.locator("#reference-width")).toHaveValue("7500");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator("#save-project").click();
+  const download = await downloadPromise;
+  const path = await download.path();
+  if (!path) throw new Error("Project download was not created");
+  await page.locator("#file-input").setInputFiles(path);
+  await expect(page.locator("#reference-width")).toHaveValue("7500");
+  await expect(page.locator(".calibration-saved")).toContainText("6000");
+});
