@@ -54,4 +54,28 @@ describe("inference",()=>{
  it("wraps polar tracking cleanly across zero degrees",()=>{const r=infer({x:100,y:-1},{lastPoint:{x:0,y:0},polarIncrementDeg:15},new SpatialIndex(100),1);const polar=r.guides.find(g=>g.type==="polar");expect(polar).toBeDefined();expect(polar!.angle).toBeCloseTo(0);});
  it("does not emit non-finite values for zero-length reference segments",()=>{const x=new SpatialIndex(100);x.insert({id:"Z",type:"line",layer:"S-BEAM",start:{x:10,y:10},end:{x:10,y:10}});const r=infer({x:10,y:10},{lastPoint:{x:0,y:0}},x,1);expect(Number.isFinite(r.point.x)).toBe(true);expect(Number.isFinite(r.point.y)).toBe(true);expect(r.snaps.every(s=>Number.isFinite(s.distancePx))).toBe(true);});
  it("treats a full-circle arc as a complete sweep",()=>{const x=new SpatialIndex(500);x.insert({id:"FULL",type:"arc",layer:"S-ANNO",center:{x:0,y:0},radius:100,startAngle:0,endAngle:Math.PI*2});const r=infer({x:0,y:100},{},x,1);expect(r.snaps.some(s=>s.type==="nearest" && Math.abs(s.point.x)<1e-7 && Math.abs(s.point.y-100)<1e-7)).toBe(true);});
+
+ it("finds the nearest point on a circle",()=>{
+  const x=new SpatialIndex(500);x.insert({id:"CIRCLE",type:"circle",layer:"S-ANNO",center:{x:0,y:0},radius:100});
+  const r=infer({x:0,y:105},{},x,1);
+  expect(r.snaps[0]?.type).toBe("nearest");
+  expect(r.point.x).toBeCloseTo(0);
+  expect(r.point.y).toBeCloseTo(100);
+ });
+ it("rejects candidates just outside the 10-pixel tolerance for every snap type",()=>{
+  const cases=[
+   {name:"endpoint",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"E",type:"line" as const,layer:"S-BEAM",start:{x:0,y:0},end:{x:1000,y:0}});return x;})(),cursor:{x:0,y:15}},
+   {name:"midpoint",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"M",type:"line" as const,layer:"S-BEAM",start:{x:0,y:0},end:{x:1000,y:0}});return x;})(),cursor:{x:500,y:15}},
+   {name:"center",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"C",type:"column" as const,layer:"S-COLS",center:{x:0,y:0},width:100,height:100});return x;})(),cursor:{x:0,y:15}},
+   {name:"intersection",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"I1",type:"line" as const,layer:"S-BEAM",start:{x:-100,y:0},end:{x:100,y:0}});x.insert({id:"I2",type:"line" as const,layer:"S-BEAM",start:{x:0,y:-100},end:{x:0,y:100}});return x;})(),cursor:{x:0,y:15}},
+   {name:"perpendicular",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"P",type:"line" as const,layer:"S-BEAM",start:{x:-1000,y:0},end:{x:1000,y:0}});return x;})(),cursor:{x:0,y:15},lastPoint:{x:0,y:100}},
+   {name:"nearest",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"N",type:"circle" as const,layer:"S-ANNO",center:{x:0,y:0},radius:100});return x;})(),cursor:{x:0,y:115}},
+   {name:"grid",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"G",type:"grid" as const,layer:"S-GRID",start:{x:0,y:0},end:{x:1000,y:0}});return x;})(),cursor:{x:500,y:15}}
+  ];
+  for(const item of cases){
+   const result=infer(item.cursor,{lastPoint:item.lastPoint},item.index,1);
+   expect(result.snaps, item.name).toHaveLength(0);
+  }
+ });
+
 });
