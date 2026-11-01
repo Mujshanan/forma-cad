@@ -459,6 +459,7 @@ referenceContent.addEventListener("click",event=>{
 });
 referenceContent.addEventListener("change",event=>{
   const target=event.target as HTMLInputElement|HTMLSelectElement;
+  if(target.id==="calibration-distance")return;
   const reference=model.references.find(item=>item.id===selectedReferenceId);if(!reference)return;
   if(target.id==="reference-anchor"||target.id==="reference-x"||target.id==="reference-y"||target.id==="reference-width"||target.id==="reference-rotation"||target.id==="reference-visible"||target.id==="reference-locked")pushUndo();
   if(target.id==="reference-anchor")reference.anchor=target.value as ReferenceImage["anchor"];
