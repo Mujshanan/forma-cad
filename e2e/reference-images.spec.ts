@@ -101,3 +101,50 @@ test("two-point calibration scales the image and survives undo, redo and save/lo
   expect(Number(await page.locator("#reference-width").inputValue())).toBeCloseTo(7500, 0);
   await expect(page.locator(".calibration-saved")).toContainText("6000");
 });
+
+
+test("analyzed calibrated plan provides raster endpoint snapping while drafting", async ({ page }) => {
+  await page.goto("/");
+  const base64 = await page.evaluate(async () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 120; canvas.height = 100;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#fff"; context.fillRect(0, 0, 120, 100);
+    context.strokeStyle = "#111"; context.lineWidth = 2;
+    context.beginPath();
+    context.moveTo(12, 30); context.lineTo(108, 30);
+    context.moveTo(65, 10); context.lineTo(65, 90);
+    context.stroke();
+    const blob = await new Promise<Blob>(resolve => canvas.toBlob(value => resolve(value!), "image/png"));
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  });
+  await page.locator("#reference-file-input").setInputFiles({
+    name: "simple-structural-plan.png", mimeType: "image/png", buffer: Buffer.from(base64, "base64"),
+  });
+  await page.locator("#calibrate-reference").click();
+  const image = page.locator("#reference-layer image");
+  const bounds = await image.boundingBox();
+  if (!bounds) throw new Error("Reference image is not visible");
+  await page.mouse.click(bounds.x + bounds.width * 0.1, bounds.y + bounds.height * 0.3);
+  await page.mouse.click(bounds.x + bounds.width * 0.9, bounds.y + bounds.height * 0.3);
+  await page.locator("#calibration-distance").fill("6000");
+  await page.locator("#apply-calibration").click();
+
+  await page.locator("#analyze-reference").click();
+  await expect(page.locator(".reference-analysis-status")).toContainText("detected line segments");
+  await expect(page.locator("#snap-readout")).toContainText("REFERENCES");
+
+  await page.getByRole("button", { name: /Line/ }).click();
+  const startX = bounds.x + bounds.width * 0.25;
+  const startY = bounds.y + bounds.height * 0.75;
+  const nearEndpointX = bounds.x + bounds.width * 0.1;
+  const nearEndpointY = bounds.y + bounds.height * 0.3;
+  await page.mouse.click(startX, startY);
+  await page.mouse.move(nearEndpointX + 2, nearEndpointY + 2);
+  await expect(page.locator(".snap-point.is-snapped")).toBeVisible();
+  await page.mouse.click(nearEndpointX + 2, nearEndpointY + 2);
+  await expect(page.locator("#world-layer line.entity")).toHaveCount(1);
+});
