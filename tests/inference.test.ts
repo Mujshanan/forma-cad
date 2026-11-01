@@ -33,6 +33,12 @@ describe("inference",()=>{
   const r=infer({x:1.4,y:0},{previousSnap:previous},x,1);
   expect(r.point).toEqual({x:3,y:0});
  });
+ it("retains the active snap just beyond the normal tolerance",()=>{
+  const x=new SpatialIndex(100);x.insert({id:"A",type:"line",layer:"S-BEAM",start:{x:0,y:0},end:{x:0,y:100}});
+  const previous={type:"endpoint" as const,point:{x:0,y:0},entityIds:["A"],distancePx:9.5};
+  const r=infer({x:11.5,y:0},{previousSnap:previous},x,1);
+  expect(r.point).toEqual({x:0,y:0});
+ });
  it("allows explicit candidate cycling to override hysteresis",()=>{
   const x=new SpatialIndex(100);x.insert({id:"A",type:"line",layer:"S-BEAM",start:{x:0,y:0},end:{x:0,y:100}});
   x.insert({id:"B",type:"line",layer:"S-BEAM",start:{x:3,y:0},end:{x:3,y:100}});
