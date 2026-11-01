@@ -20,6 +20,12 @@ describe("inference",()=>{
   const r=infer({x:101,y:100},{},x,1);
   expect(r.snaps.some(s=>s.type==="center" && s.point.x===100 && s.point.y===100)).toBe(true);
  });
+ it("orders equidistant candidates deterministically",()=>{
+  const x=new SpatialIndex(100);
+  x.insert({id:"RIGHT",type:"line",layer:"S-BEAM",start:{x:2,y:0},end:{x:2,y:100}});
+  x.insert({id:"LEFT",type:"line",layer:"S-BEAM",start:{x:-2,y:0},end:{x:-2,y:100}});
+  expect(infer({x:0,y:0},{},x,1).point).toEqual({x:-2,y:0});
+ });
  it("retains the previous equal-priority snap inside the hysteresis band",()=>{
   const x=new SpatialIndex(100);x.insert({id:"A",type:"line",layer:"S-BEAM",start:{x:0,y:0},end:{x:0,y:100}});
   x.insert({id:"B",type:"line",layer:"S-BEAM",start:{x:3,y:0},end:{x:3,y:100}});
