@@ -31,7 +31,7 @@ test("Shift locks the active segment direction until Shift is released", async (
       dy: -(Number(line.getAttribute("y2")) - Number(line.getAttribute("y1"))),
     };
   });
-  expect(released.dy / released.dx).toBeGreaterThan(0.5);
+  expect(released.dy / released.dx).toBeLessThan(-1.0);
 });
 
 test("Shift direction locking remains active when object snapping is disabled", async ({ page }) => {
