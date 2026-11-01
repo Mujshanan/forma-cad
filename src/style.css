@@ -330,6 +330,30 @@ button:focus-visible, a:focus-visible {
   stroke-linejoin: round;
   pointer-events: none;
 }
+
+.drafting-inputs {
+  position: absolute; top: 14px; left: 50%; z-index: 1;
+  width: min(390px, calc(100% - 28px)); padding: 10px;
+  transform: translateX(-50%); border: 1px solid #3b4a5d;
+  border-radius: 8px; background: #1d2530ee; box-shadow: 0 8px 24px #0005;
+  pointer-events: none;
+}
+.drafting-inputs.hidden { display: none; }
+.drafting-inputs-title {
+  display: flex; justify-content: space-between; margin-bottom: 8px;
+  color: #8e9daf; font-size: 8px; font-weight: 800; letter-spacing: .9px;
+}
+.drafting-inputs-title span { color: #91bfff; font-weight: 500; letter-spacing: 0; }
+.drafting-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.draft-field {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: baseline; gap: 5px;
+  padding: 7px 9px; border: 1px solid #3a4655; border-radius: 5px;
+  background: #151b23; color: #8998aa; font-size: 10px;
+}
+.draft-field.active { border-color: #579cff; background: #1d3048; color: #c9e1ff; }
+.draft-field strong { color: #edf5ff; font-size: 13px; font-variant-numeric: tabular-nums; }
+.draft-field small { color: #91a2b8; font-size: 9px; }
+
 .dimension-label {
   fill: #b1d5ff;
   font-size: 11px;
