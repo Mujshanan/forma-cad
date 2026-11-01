@@ -381,7 +381,8 @@ referenceFileInput.addEventListener("change",async()=>{
     const dimensions = await new Promise<{width:number;height:number}>((resolve,reject)=>{const image=new Image();image.onload=()=>resolve({width:image.naturalWidth,height:image.naturalHeight});image.onerror=()=>reject(new Error("Image could not be decoded"));image.src=dataUrl;});
     const anchor = (document.querySelector<HTMLSelectElement>("#reference-placement")?.value ?? "origin") as ReferenceImage["anchor"];
     pushUndo();
-    let referenceNumber=model.references.length+1;while(model.references.some(item=>item.id==="REF"+referenceNumber))referenceNumber++;\n    const reference: ReferenceImage = {id:"REF"+referenceNumber,name:file.name,dataUrl,pixelWidth:dimensions.width,pixelHeight:dimensions.height,widthMm:10000,position:{x:0,y:0},rotation:0,opacity:0.5,visible:true,locked:false,anchor};
+    let referenceNumber=model.references.length+1;while(model.references.some(item=>item.id==="REF"+referenceNumber))referenceNumber++;
+    const reference: ReferenceImage = {id:"REF"+referenceNumber,name:file.name,dataUrl,pixelWidth:dimensions.width,pixelHeight:dimensions.height,widthMm:10000,position:{x:0,y:0},rotation:0,opacity:0.5,visible:true,locked:false,anchor};
     model.references.push(reference);selectedReferenceId=reference.id;selectedId=null;render();fitDrawing();updateHistoryButtons();
   } catch(error) { alert("Could not attach reference: "+(error instanceof Error?error.message:"Invalid image")); }
   referenceFileInput.value="";
