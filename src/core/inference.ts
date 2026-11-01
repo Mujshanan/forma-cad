@@ -3,11 +3,12 @@ import { add, sub, scale, dot, length, distance, midpoint, projectPointOnLine, p
 import type { Entity } from "./model";
 import { SpatialIndex } from "./spatial";
 import { getReferenceGeometry } from "./references";
+import type { AlignmentTracker } from "./alignment-tracker";
 export type SnapType = "endpoint" | "midpoint" | "center" | "intersection" | "perpendicular" | "nearest" | "grid";
 export type GuideType = "horizontal" | "vertical" | "extension" | "parallel" | "perpendicular" | "polar";
 export type Snap = { type: SnapType; point: Vec2; entityIds: string[]; distancePx: number };
 export type Guide = { type: GuideType; start: Vec2; end: Vec2; entityId?: string; angle?: number };
-export type InferenceContext = { activeTool?: string; lastPoint?: Vec2; direction?: Vec2; shift?: boolean; polarIncrementDeg?: number; candidateIndex?: number; previousSnap?: Snap; hysteresisPx?: number };
+export type InferenceContext = { activeTool?: string; lastPoint?: Vec2; direction?: Vec2; shift?: boolean; polarIncrementDeg?: number; candidateIndex?: number; previousSnap?: Snap; hysteresisPx?: number; alignmentTracker?: AlignmentTracker };
 export type InferenceResult = { point: Vec2; snaps: Snap[]; guides: Guide[]; label?: string };
 const PRIORITY: Record<SnapType, number> = { endpoint: 7, midpoint: 6, center: 5, intersection: 4, perpendicular: 3, nearest: 2, grid: 1 };
 const segmentOf = (e: Entity): Segment[] => getReferenceGeometry(e).segments.map(reference => reference.segment);
@@ -94,9 +95,20 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
     const origin=context.lastPoint, delta=sub(cursorWorld,origin), a=angleOf(delta), inc=(context.polarIncrementDeg??15)*Math.PI/180;
     const polar=context.shift && context.direction ? angleOf(context.direction) : Math.round(a/inc)*inc, projected=add(origin,scale(fromAngle(polar),dot(delta,fromAngle(polar))));
     if(context.shift || distance(projected,cursorWorld)<=tolerance) { point=projected; guides.push({type:"polar",start:origin,end:projected,angle:polar}); }
-    for(const anchor of anchors) {
-      if(Math.abs(anchor.point.x-cursorWorld.x)<=tolerance) guides.push({type:"vertical",start:anchor.point,end:{x:anchor.point.x,y:cursorWorld.y},entityId:anchor.id});
-      if(Math.abs(anchor.point.y-cursorWorld.y)<=tolerance) guides.push({type:"horizontal",start:anchor.point,end:{x:cursorWorld.x,y:anchor.point.y},entityId:anchor.id});
+    if (context.alignmentTracker) {
+      const references = context.alignmentTracker.update(cursorWorld, anchors, tolerance * 2, tolerance * 5);
+      for (const reference of references) {
+        if (reference.axis === "vertical") {
+          guides.push({ type: "vertical", start: reference.anchor, end: { x: reference.coordinate, y: cursorWorld.y }, entityId: reference.entityId });
+        } else {
+          guides.push({ type: "horizontal", start: reference.anchor, end: { x: cursorWorld.x, y: reference.coordinate }, entityId: reference.entityId });
+        }
+      }
+    } else {
+      for(const anchor of anchors) {
+        if(Math.abs(anchor.point.x-cursorWorld.x)<=tolerance) guides.push({type:"vertical",start:anchor.point,end:{x:anchor.point.x,y:cursorWorld.y},entityId:anchor.id});
+        if(Math.abs(anchor.point.y-cursorWorld.y)<=tolerance) guides.push({type:"horizontal",start:anchor.point,end:{x:cursorWorld.x,y:anchor.point.y},entityId:anchor.id});
+      }
     }
     for(const item of segments) {
       const d=sub(item.s.end,item.s.start), base=angleOf(d), parallel=add(origin,scale(fromAngle(base),dot(delta,fromAngle(base))));
