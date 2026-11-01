@@ -75,7 +75,8 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
       distance(s.point, context.previousSnap!.point) <= 1e-5 &&
       s.entityIds.some(id => context.previousSnap!.entityIds.includes(id))
     );
-    if (previous && previous.type !== selected.type &&
+    if (previous &&
+        !(previous.point.x === selected.point.x && previous.point.y === selected.point.y && previous.entityIds.join(",") === selected.entityIds.join(",")) &&
         PRIORITY[previous.type] === PRIORITY[selected.type] &&
         previous.distancePx <= 10 + margin &&
         previous.distancePx <= selected.distancePx + margin) selected = previous;
