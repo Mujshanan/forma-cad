@@ -22,7 +22,7 @@ The goal is to reproduce the useful *interaction patterns* of Revit's temporary 
 - Basic line, polyline and rectangle drafting tools.
 - Object snaps: endpoint, midpoint, center, intersection, perpendicular, nearest and grid.
 - Temporary horizontal, vertical, extension, parallel, perpendicular and polar tracking guides.
-- Temporary distance/angle feedback and typed length input.
+- Temporary distance/angle feedback with separate typed length and angle fields; Tab switches fields and Shift+Tab switches backward.
 - Shift direction lock, Tab snap-candidate cycling and Escape cancellation.
 - Layers, undo/redo and native JSON project save/load.
 - Layer-aware DXF export.
@@ -49,7 +49,8 @@ The geometry and inference core must remain independent of the browser DOM and r
 - `src/core/spatial.ts`: uniform-grid spatial hash for nearby entity lookup.
 - `src/core/references.ts`: reusable world-space reference points and segments for structural entities.
 - `src/core/inference.ts`: snap candidates, deterministic ranking, snap hysteresis, tolerance handling and tracking-guide calculation.
-- `src/interaction/temporary-dimensions.ts`: independent live dimension calculations, typed length/angle/polar parsing and a keyboard drafting session; constrains transient preview points without mutating geometry or inference state.
+- `src/interaction/temporary-dimensions.ts`: independent live dimension calculations and typed length/angle/polar parsing.
+- `src/interaction/drafting-input-fields.ts`: isolated two-field keyboard input state; combines length and angle into a polar constraint without mutating geometry or inference state.
 - `src/core/view.ts`: pure world/screen transforms and cursor-anchored zoom.
 - `src/tools/` (planned): isolated stateful drawing tools.
 - `src/interaction/` (planned): pointer/keyboard input, tracking state and tool lifecycle.
@@ -299,6 +300,7 @@ A feature is done only when:
 - [x] Extract live temporary-dimension calculations from the canvas renderer into an independently tested interaction module.
 - [x] Add typed length, angle and polar-input parsing/application primitives without coupling them to inference.
 - [x] Connect typed length, angle and polar input to the drawing keyboard; preview updates while typing, Enter commits and Escape cancels.
+- [x] Add separate temporary length/angle fields with Tab and Shift+Tab navigation; preserve snap cycling when no segment is active.
 - [x] Test drafting-session input, invalid-value rejection, backspace recovery, cancellation/reset and shortcut-key precedence.
 - [ ] Add robust editing, undo/redo, layer controls and DXF export.
 - [x] Add browser end-to-end tests for typed length, typed angle, Enter commit and Escape cancellation.
