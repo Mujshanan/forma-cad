@@ -1,5 +1,7 @@
 import { createDocument, type Entity, type DocumentModel, type ReferenceImage } from "./core/model";
-import { referenceImageCorners, referenceImageHeight, referenceImageLocalOffset, referenceImageSvgTransform } from "./core/reference-image";
+import { calibrateReferenceImage, referenceImageCorners, referenceImageHeight, referenceImageLocalOffset, referenceImageNormalizedPoint, referenceImageSvgTransform } from "./core/reference-image";
+import { detectRasterSegments } from "./core/raster-line-detection";
+import { snapToReferenceGeometry, type ReferenceSnapResult } from "./core/reference-snapping";
 import type { Vec2 } from "./core/geometry";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import "./style.css";
@@ -27,6 +29,8 @@ let pointerWorld: Vec2 = { x: 0, y: 0 };
 let selectedId: string | null = null;
 let selectedReferenceId: string | null = null;
 let dragReference: { id: string; offset: Vec2 } | null = null;
+let calibrationPick: { referenceId: string; firstPoint: Vec2 | null; secondPoint: Vec2 | null; measuredDistance: number | null; error: string | null } | null = null;
+let referenceSnapState: ReferenceSnapResult | null = null;
 let snapEnabled = true;
 let gridVisible = false;
 let spaceDown = false;
@@ -43,7 +47,8 @@ function historyState(): HistoryState { return { entities: cloneEntities(), refe
 function pushUndo() { undoStack.push(historyState()); if (undoStack.length > 100) undoStack.shift(); redoStack.length = 0; }
 function restoreHistory(state: HistoryState) {
   model.entities.splice(0, model.entities.length, ...JSON.parse(JSON.stringify(state.entities)) as Entity[]);
-  selectedId = state.selectedId; nextId = state.nextId; firstPoint = null; dragEndpoint = null; render(); updateHistoryButtons();
+  model.references.splice(0, model.references.length, ...JSON.parse(JSON.stringify(state.references)) as ReferenceImage[]);
+  selectedId = state.selectedId; selectedReferenceId = state.selectedReferenceId; nextId = state.nextId; firstPoint = null; dragEndpoint = null; dragReference = null; calibrationPick = null; render(); updateHistoryButtons();
 }
 function undo() {
   if (!undoStack.length) return;
@@ -73,7 +78,7 @@ function lineEntities() {
   return model.entities.filter((entity): entity is Extract<Entity, { start: Vec2; end: Vec2 }> => "start" in entity && "end" in entity);
 }
 function snapPoint(point: Vec2): Vec2 {
-  if (!snapEnabled) return { ...point };
+  if (!snapEnabled) { referenceSnapState = null; return { ...point }; }
   // Only snap to actual, committed endpoints. No inference projections or alignment overrides.
   let best: Vec2 | null = null;
   let bestDistance = 10 / view.scale;
@@ -83,6 +88,9 @@ function snapPoint(point: Vec2): Vec2 {
       if (d <= bestDistance) { bestDistance = d; best = candidate; }
     }
   }
+  const referenceSnap = snapToReferenceGeometry(point, model.references, view.scale);
+  referenceSnapState = referenceSnap;
+  if (referenceSnap && (!best || referenceSnap.distancePx < bestDistance * view.scale)) return { ...referenceSnap.point };
   return best ? { ...best } : { ...point };
 }
 function entitySvg(entity: Entity): string {
@@ -131,8 +139,15 @@ function render() {
   overlayLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
   worldLayer.innerHTML = model.entities.map(entitySvg).join("");
   overlayLayer.innerHTML = "";
+  const snappedPointer = snapPoint(pointerWorld);
+  if (referenceSnapState?.guides.length) {
+    for (const guide of referenceSnapState.guides) {
+      const end = guide.axis === "horizontal" ? { x: pointerWorld.x, y: guide.coordinate } : { x: guide.coordinate, y: pointerWorld.y };
+      overlayLayer.insertAdjacentHTML("beforeend", `<line class="reference-snap-guide" x1="${guide.anchor.x}" y1="${-guide.anchor.y}" x2="${end.x}" y2="${-end.y}"/>`);
+    }
+  }
   if (firstPoint && tool !== "select") {
-    const end = snapPoint(pointerWorld);
+    const end = snappedPointer;
     if (tool === "line") {
       const dx=end.x-firstPoint.x, dy=end.y-firstPoint.y, length=Math.hypot(dx,dy), angle=(Math.atan2(dy,dx)*180/Math.PI+360)%360;
       overlayLayer.innerHTML = `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${end.x}" y2="${-end.y}"/><text class="dimension-label listening-dimension" x="${(firstPoint.x+end.x)/2}" y="${-(firstPoint.y+end.y)/2-150/view.scale}">L ${fmt(length)} mm · ${fmt(angle)}°</text>`;
@@ -157,7 +172,6 @@ function render() {
       `<circle class="endpoint-handle selected-handle" data-endpoint-handle="${selected.id}" data-endpoint="start" cx="${selected.start.x}" cy="${-selected.start.y}" r="${7 / view.scale}"/><circle class="endpoint-handle selected-handle" data-endpoint-handle="${selected.id}" data-endpoint="end" cx="${selected.end.x}" cy="${-selected.end.y}" r="${7 / view.scale}"/>`);
   }
   // Make a successful endpoint snap explicit rather than silently moving the cursor.
-  const snappedPointer = snapPoint(pointerWorld);
   if (distance(snappedPointer, pointerWorld) > 0.001) {
     overlayLayer.insertAdjacentHTML("beforeend",
       `<circle class="snap-point is-snapped" data-testid="snap-indicator" cx="${snappedPointer.x}" cy="${-snappedPointer.y}" r="${6 / view.scale}"/>`);
@@ -166,7 +180,7 @@ function render() {
   if (bg) bg.style.opacity = gridVisible ? "1" : "0";
   coordinateReadout.textContent = `X ${fmt(pointerWorld.x)} · Y ${fmt(pointerWorld.y)} mm`;
   zoomReadout.textContent = Math.round(view.scale*100)+"%";
-  snapReadout.textContent = snapEnabled ? "SNAP: ENDPOINTS" : "SNAP: OFF";
+  snapReadout.textContent = snapEnabled ? (model.references.some(reference => reference.visible && reference.detectedSegments?.length) ? "SNAP: ENDPOINTS + REFERENCES" : "SNAP: ENDPOINTS") : "SNAP: OFF";
   entityCount.textContent = model.entities.length + (model.entities.length === 1 ? " object" : " objects");
   renderProperties();
   renderReferencePanel();
@@ -176,34 +190,55 @@ function renderReferencePanel() {
     referenceContent.innerHTML = '<div class="reference-empty">No reference images attached.</div>';
     return;
   }
-  referenceContent.innerHTML = model.references.map(reference => {
+  const rows = model.references.map(reference => {
     const selected = reference.id === selectedReferenceId;
     return `<div class="reference-row ${selected ? "active" : ""}" data-reference-select="${reference.id}">
       <span class="reference-status">${reference.visible ? "◉" : "○"}</span>
       <span class="reference-name" title="${escapeHtml(reference.name)}">${escapeHtml(reference.name)}</span>
       <button type="button" class="reference-small-action" data-reference-toggle="${reference.id}" aria-label="${reference.visible ? "Hide" : "Show"} ${escapeHtml(reference.name)}">${reference.visible ? "Hide" : "Show"}</button>
     </div>`;
-  }).join("") + (() => {
-    const reference = model.references.find(item => item.id === selectedReferenceId);
-    if (!reference) return '<p class="reference-hint">Select a reference to adjust its placement and display.</p>';
-    return `<div class="reference-editor">
-      <div class="reference-editor-title">PLACEMENT · ${escapeHtml(reference.name)}</div>
-      <label>Anchor<select id="reference-anchor"><option value="origin" ${reference.anchor === "origin" ? "selected" : ""}>Origin to origin</option><option value="center" ${reference.anchor === "center" ? "selected" : ""}>Center to center</option></select></label>
-      <div class="reference-field-grid">
-        <label>X (mm)<input id="reference-x" type="number" step="any" value="${reference.position.x}"></label>
-        <label>Y (mm)<input id="reference-y" type="number" step="any" value="${reference.position.y}"></label>
-        <label>Width (mm)<input id="reference-width" type="number" min="0.001" step="any" value="${reference.widthMm}"></label>
-        <label>Rotation (°)<input id="reference-rotation" type="number" step="any" value="${reference.rotation}"></label>
-      </div>
-      <label class="reference-opacity-label">Opacity <output id="reference-opacity-value">${Math.round(reference.opacity * 100)}%</output><input id="reference-opacity" type="range" min="0" max="100" value="${Math.round(reference.opacity * 100)}"></label>
-      <div class="reference-toggle-row">
-        <label><input id="reference-visible" type="checkbox" ${reference.visible ? "checked" : ""}> Visible</label>
-        <label><input id="reference-locked" type="checkbox" ${reference.locked ? "checked" : ""}> Locked</label>
-      </div>
-      <button type="button" id="remove-reference" class="reference-remove">Remove reference</button>
-      <p class="reference-hint">Drag the image on the canvas to move it. Width preserves its aspect ratio.</p>
-    </div>`;
-  })();
+  }).join("");
+  const reference = model.references.find(item => item.id === selectedReferenceId);
+  if (!reference) {
+    referenceContent.innerHTML = rows + '<p class="reference-hint">Select a reference to adjust its placement and display.</p>';
+    return;
+  }
+  let editor = `<div class="reference-editor">
+    <div class="reference-editor-title">PLACEMENT · ${escapeHtml(reference.name)}</div>
+    <label>Anchor<select id="reference-anchor"><option value="origin" ${reference.anchor === "origin" ? "selected" : ""}>Origin to origin</option><option value="center" ${reference.anchor === "center" ? "selected" : ""}>Center to center</option></select></label>
+    <div class="reference-field-grid">
+      <label>X (mm)<input id="reference-x" type="number" step="any" value="${reference.position.x}"></label>
+      <label>Y (mm)<input id="reference-y" type="number" step="any" value="${reference.position.y}"></label>
+      <label>Width (mm)<input id="reference-width" type="number" min="0.001" step="any" value="${reference.widthMm}"></label>
+      <label>Rotation (°)<input id="reference-rotation" type="number" step="any" value="${reference.rotation}"></label>
+    </div>
+    <label class="reference-opacity-label">Opacity <output id="reference-opacity-value">${Math.round(reference.opacity * 100)}%</output><input id="reference-opacity" type="range" min="0" max="100" value="${Math.round(reference.opacity * 100)}"></label>
+    <div class="reference-toggle-row">
+      <label><input id="reference-visible" type="checkbox" ${reference.visible ? "checked" : ""}> Visible</label>
+      <label><input id="reference-locked" type="checkbox" ${reference.locked ? "checked" : ""}> Locked</label>
+    </div>
+    <button type="button" id="calibrate-reference" class="reference-calibrate">Calibrate from two points</button>
+    <button type="button" id="analyze-reference" class="reference-analyze" ${reference.calibration ? "" : "disabled"}>Analyze architectural linework</button>
+    ${reference.detectedSegments?.length ? `<p class="reference-analysis-status">${reference.detectedSegments.length} detected line segments · endpoint, intersection, midpoint and alignment snaps active</p>` : `<p class="reference-analysis-status">${reference.calibration ? "Analyze this calibrated image to enable reference snapping." : "Calibrate the image before analyzing its linework."}</p>`}
+    <button type="button" id="remove-reference" class="reference-remove">Remove reference</button>
+    <p class="reference-hint">Drag the image on the canvas to move it. Width preserves its aspect ratio.</p>
+  </div>`;
+  if (calibrationPick?.referenceId === reference.id) {
+    if (calibrationPick.secondPoint) {
+      editor += `<div class="calibration-editor">
+        <div class="calibration-title">TWO-POINT CALIBRATION</div>
+        <p>Measured distance on current image scale: <strong>${fmt(calibrationPick.measuredDistance ?? 0)} mm</strong></p>
+        <label>Known real distance (mm)<input id="calibration-distance" type="number" min="0.001" step="any" placeholder="e.g. 6000"></label>
+        ${calibrationPick.error ? `<p class="calibration-error">${escapeHtml(calibrationPick.error)}</p>` : ""}
+        <div class="calibration-actions"><button id="apply-calibration" type="button">Apply scale</button><button id="cancel-calibration" type="button">Cancel</button></div>
+      </div>`;
+    } else {
+      editor += `<div class="calibration-editor"><div class="calibration-title">TWO-POINT CALIBRATION</div><p>${calibrationPick.firstPoint ? "First point selected. Click the second endpoint of the known dimension." : "Click the first endpoint of a known dimension on the image."}</p><button id="cancel-calibration" type="button">Cancel calibration</button></div>`;
+    }
+  } else if (reference.calibration) {
+    editor += `<p class="calibration-saved">Calibrated · known distance ${fmt(reference.calibration.actualDistanceMm)} mm</p>`;
+  }
+  referenceContent.innerHTML = rows + editor;
 }
 function rebuildLayers() {
   layerList.innerHTML = model.layers.map(layer=>`<div class="layer-row"><span class="layer-swatch" style="background:${layer.color}"></span><span>${escapeHtml(layer.name)}</span></div>`).join("");
@@ -269,6 +304,23 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 svg.addEventListener("pointerdown", event => {
+  if (calibrationPick) {
+    const reference = model.references.find(item => item.id === calibrationPick!.referenceId);
+    if (!reference) { calibrationPick = null; render(); return; }
+    const point = toWorld(event);
+    if (!referenceImageNormalizedPoint(reference, point)) {
+      calibrationPick.error = "Pick a point inside the visible reference image.";
+      render(); event.preventDefault(); return;
+    }
+    if (!calibrationPick.firstPoint) {
+      calibrationPick.firstPoint = point; calibrationPick.error = null;
+    } else {
+      const measuredDistance = distance(calibrationPick.firstPoint, point);
+      if (measuredDistance <= 1e-6) calibrationPick.error = "Choose two different points.";
+      else { calibrationPick.secondPoint = point; calibrationPick.measuredDistance = measuredDistance; calibrationPick.error = null; }
+    }
+    render(); event.preventDefault(); return;
+  }
   const referenceElement = (event.target as Element | null)?.closest<SVGGElement>("[data-reference-id]");
   if (event.button === 0 && referenceElement && tool === "select") {
     const id = referenceElement.dataset.referenceId;
@@ -294,7 +346,7 @@ svg.addEventListener("pointerdown", event => {
   if (event.button!==0) return;
   const raw=toWorld(event); pointerWorld=raw;
   if (tool==="select") { nearestSelection(raw); return; }
-  if (!firstPoint) { firstPoint={...raw}; render(); return; }
+  if (!firstPoint) { firstPoint=snapPoint(raw); render(); return; }
   commitShape(snapPoint(raw));
 });
 svg.addEventListener("pointermove", event => {
@@ -320,6 +372,7 @@ svg.addEventListener("wheel",event=>{
 window.addEventListener("keydown",event=>{
   if(isEditableTarget(event.target)) return;
   if(event.code==="Space"){spaceDown=true;svg.style.cursor="grab";}
+  if(event.key==="Escape" && calibrationPick){calibrationPick=null;render();return;}
   if(event.key==="Escape" && firstPoint){firstPoint=null;render();return;}
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
@@ -387,8 +440,54 @@ referenceFileInput.addEventListener("change",async()=>{
   } catch(error) { alert("Could not attach reference: "+(error instanceof Error?error.message:"Invalid image")); }
   referenceFileInput.value="";
 });
-referenceContent.addEventListener("click",event=>{
+referenceContent.addEventListener("click",async event=>{
   const target=event.target as HTMLElement;
+  if(target.id==="calibrate-reference"){
+    const reference=model.references.find(item=>item.id===selectedReferenceId);
+    if(reference){calibrationPick={referenceId:reference.id,firstPoint:null,secondPoint:null,measuredDistance:null,error:null};render();}
+    return;
+  }
+  if(target.id==="analyze-reference"){
+    const reference=model.references.find(item=>item.id===selectedReferenceId);
+    if(!reference?.calibration){return;}
+    const referenceId=reference.id;
+    const button=target as HTMLButtonElement;button.disabled=true;button.textContent="Analyzing…";
+    try {
+      const image=await new Promise<HTMLImageElement>((resolve,reject)=>{const element=new Image();element.onload=()=>resolve(element);element.onerror=()=>reject(new Error("Reference image could not be decoded"));element.src=reference.dataUrl;});
+      const factor=Math.min(1,1200/Math.max(image.naturalWidth,image.naturalHeight));
+      const width=Math.max(2,Math.round(image.naturalWidth*factor)),height=Math.max(2,Math.round(image.naturalHeight*factor));
+      const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;
+      const context=canvas.getContext("2d",{willReadFrequently:true});
+      if(!context)throw new Error("Canvas pixel access is unavailable");
+      context.drawImage(image,0,0,width,height);
+      const pixels=context.getImageData(0,0,width,height);
+      const segments=detectRasterSegments(pixels.data,width,height);
+      const current=model.references.find(item=>item.id===referenceId);
+      if(current){pushUndo();current.detectedSegments=segments;render();updateHistoryButtons();}
+    } catch(error) {
+      alert("Could not analyze reference linework: "+(error instanceof Error?error.message:"Unknown error"));
+      render();
+    }
+    return;
+  }
+  if(target.id==="cancel-calibration"){calibrationPick=null;render();return;}
+  if(target.id==="apply-calibration"){
+    const reference=model.references.find(item=>item.id===selectedReferenceId);
+    const actualDistance=Number(referenceContent.querySelector<HTMLInputElement>("#calibration-distance")?.value);
+    const activeCalibration=calibrationPick;
+    if(reference&&activeCalibration?.firstPoint&&activeCalibration.secondPoint){
+      try {
+        const calibrated=calibrateReferenceImage(reference,activeCalibration.firstPoint,activeCalibration.secondPoint,actualDistance);
+        pushUndo();
+        Object.assign(reference,calibrated);
+        calibrationPick=null;render();updateHistoryButtons();fitDrawing();
+      } catch(error) {
+        activeCalibration.error=error instanceof Error?error.message:"Invalid calibration";
+        render();
+      }
+    }
+    return;
+  }
   const toggle=target.closest<HTMLElement>("[data-reference-toggle]");
   if(toggle){const reference=model.references.find(item=>item.id===toggle.dataset.referenceToggle);if(reference){pushUndo();reference.visible=!reference.visible;render();updateHistoryButtons();}return;}
   if(target.id==="remove-reference"){const index=model.references.findIndex(item=>item.id===selectedReferenceId);if(index>=0){pushUndo();model.references.splice(index,1);selectedReferenceId=null;render();updateHistoryButtons();}return;}
@@ -397,6 +496,7 @@ referenceContent.addEventListener("click",event=>{
 });
 referenceContent.addEventListener("change",event=>{
   const target=event.target as HTMLInputElement|HTMLSelectElement;
+  if(target.id==="calibration-distance")return;
   const reference=model.references.find(item=>item.id===selectedReferenceId);if(!reference)return;
   if(target.id==="reference-anchor"||target.id==="reference-x"||target.id==="reference-y"||target.id==="reference-width"||target.id==="reference-rotation"||target.id==="reference-visible"||target.id==="reference-locked")pushUndo();
   if(target.id==="reference-anchor")reference.anchor=target.value as ReferenceImage["anchor"];

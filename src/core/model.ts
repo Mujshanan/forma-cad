@@ -1,4 +1,4 @@
-import type { Vec2 } from "./geometry";
+import type { Segment, Vec2 } from "./geometry";
 export type EntityStyle = { color?: string; lineweight?: number; linetype?: string };
 export type BaseEntity = { id: string; layer: string; style?: EntityStyle };
 export type LineEntity = BaseEntity & { type: "line" | "grid"; start: Vec2; end: Vec2; label?: string };
@@ -24,6 +24,8 @@ export type ReferenceImage = {
   visible: boolean;
   locked: boolean;
   anchor: "origin" | "center";
+  calibration?: { actualDistanceMm: number; pointA: Vec2; pointB: Vec2 };
+  detectedSegments?: Segment[];
 };
 export type DocumentModel = { units: "mm"; entities: Entity[]; layers: Layer[]; references: ReferenceImage[] };
 export const DEFAULT_LAYERS: Layer[] = [
