@@ -59,3 +59,27 @@ export function applyDraftInput(start: Vec2, current: Vec2, input: DraftInput): 
   const radians = angleDeg * Math.PI / 180;
   return { x: start.x + Math.cos(radians) * magnitude, y: start.y + Math.sin(radians) * magnitude };
 }
+
+/** Small keyboard-input state holder for one in-progress segment. */
+export class TemporaryDimensionSession {
+  text = "";
+
+  get isEmpty(): boolean { return this.text.length === 0; }
+  get isValid(): boolean { return this.isEmpty || parseDraftInput(this.text) !== null; }
+
+  append(character: string): boolean {
+    if (!/^[0-9.+\\-@<°]$/.test(character) && !["d", "e", "g"].includes(character.toLowerCase())) return false;
+    this.text += character;
+    return true;
+  }
+
+  backspace(): void { this.text = this.text.slice(0, -1); }
+  clear(): void { this.text = ""; }
+
+  /** Returns null for malformed input; otherwise returns the constrained preview point. */
+  resolve(start: Vec2, current: Vec2): Vec2 | null {
+    if (this.isEmpty) return current;
+    const input = parseDraftInput(this.text);
+    return input ? applyDraftInput(start, current, input) : null;
+  }
+}
