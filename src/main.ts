@@ -346,7 +346,7 @@ svg.addEventListener("pointerdown", event => {
   if (event.button!==0) return;
   const raw=toWorld(event); pointerWorld=raw;
   if (tool==="select") { nearestSelection(raw); return; }
-  if (!firstPoint) { firstPoint={...raw}; render(); return; }
+  if (!firstPoint) { firstPoint=snapPoint(raw); render(); return; }
   commitShape(snapPoint(raw));
 });
 svg.addEventListener("pointermove", event => {
