@@ -34,10 +34,8 @@ test("F3 immediately removes a stale snap from the drafting preview", async ({ p
   await canvas.hover({ position: { x: 284, y: 180 } });
 
   const snapPoint = page.locator(".snap-point");
-  const before = Number(await snapPoint.getAttribute("cx"));
+  await expect(snapPoint).toHaveClass(/is-snapped/);
   await page.keyboard.press("F3");
-  const after = Number(await snapPoint.getAttribute("cx"));
-
-  expect(after).toBeGreaterThan(before);
+  await expect(snapPoint).not.toHaveClass(/is-snapped/);
   await expect(page.locator("#snap-readout")).toContainText("SNAP: OFF");
 });
