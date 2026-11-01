@@ -2,22 +2,18 @@ import type { Vec2, Segment } from "./geometry";
 import { add, sub, scale, dot, length, distance, midpoint, projectPointOnLine, projectPointOnSegment, segmentIntersection, angleOf, fromAngle } from "./geometry";
 import type { Entity } from "./model";
 import { SpatialIndex } from "./spatial";
+import { getReferenceGeometry } from "./references";
 export type SnapType = "endpoint" | "midpoint" | "center" | "intersection" | "perpendicular" | "nearest" | "grid";
 export type GuideType = "horizontal" | "vertical" | "extension" | "parallel" | "perpendicular" | "polar";
 export type Snap = { type: SnapType; point: Vec2; entityIds: string[]; distancePx: number };
 export type Guide = { type: GuideType; start: Vec2; end: Vec2; entityId?: string; angle?: number };
-export type InferenceContext = { activeTool?: string; lastPoint?: Vec2; direction?: Vec2; shift?: boolean; polarIncrementDeg?: number; candidateIndex?: number };
+export type InferenceContext = { activeTool?: string; lastPoint?: Vec2; direction?: Vec2; shift?: boolean; polarIncrementDeg?: number; candidateIndex?: number; previousSnap?: Snap; hysteresisPx?: number };
 export type InferenceResult = { point: Vec2; snaps: Snap[]; guides: Guide[]; label?: string };
 const PRIORITY: Record<SnapType, number> = { endpoint: 7, midpoint: 6, center: 5, intersection: 4, perpendicular: 3, nearest: 2, grid: 1 };
-const segmentOf = (e: Entity): Segment[] => {
-  switch(e.type) {
-    case "line": case "grid": case "beam": case "wall": return [{start:e.start,end:e.end}];
-    case "polyline": return e.points.slice(1).map((p,i)=>({start:e.points[i],end:p})).concat(e.closed && e.points.length>2 ? [{start:e.points[e.points.length-1],end:e.points[0]}] : []);
-    case "column": return [{start:{x:e.center.x-e.width/2,y:e.center.y-e.height/2},end:{x:e.center.x+e.width/2,y:e.center.y-e.height/2}},{start:{x:e.center.x+e.width/2,y:e.center.y-e.height/2},end:{x:e.center.x+e.width/2,y:e.center.y+e.height/2}},{start:{x:e.center.x+e.width/2,y:e.center.y+e.height/2},end:{x:e.center.x-e.width/2,y:e.center.y+e.height/2}},{start:{x:e.center.x-e.width/2,y:e.center.y+e.height/2},end:{x:e.center.x-e.width/2,y:e.center.y-e.height/2}}];
-    default: return [];
-  }
-};
-const centerOf = (e: Entity): Vec2[] => e.type==="circle" || e.type==="arc" || e.type==="column" ? [e.center] : [];
+const segmentOf = (e: Entity): Segment[] => getReferenceGeometry(e).segments.map(reference => reference.segment);
+const centerOf = (e: Entity): Vec2[] => getReferenceGeometry(e).points
+  .filter(reference => reference.role === "center")
+  .map(reference => reference.point);
 function addSnap(map: Map<string,Snap>, type: SnapType, point: Vec2, id: string, cursor: Vec2, scalePx: number) {
   const d=distance(point,cursor)*scalePx, key=`${type}:${point.x.toFixed(5)}:${point.y.toFixed(5)}`;
   const old=map.get(key); if(!old || d<old.distancePx) map.set(key,{type,point,entityIds:[...new Set([...(old?.entityIds??[]),id])],distancePx:d});
@@ -62,7 +58,22 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
     if(distance(p,cursorWorld)<=tolerance) addSnap(snaps,"perpendicular",p,item.id,cursorWorld,pxScale);
   }
   const sorted=[...snaps.values()].filter(s=>s.distancePx<=10).sort((a,b)=>PRIORITY[b.type]-PRIORITY[a.type] || a.distancePx-b.distancePx);
-  const selected=sorted[Math.max(0,Math.min(context.candidateIndex??0,Math.max(0,sorted.length-1)))];
+  const candidateIndex = Math.max(0, Math.min(context.candidateIndex ?? 0, Math.max(0, sorted.length - 1)));
+  let selected = sorted[candidateIndex];
+  // Retain the prior snap briefly when two candidates of equal priority compete.
+  // Explicit Tab cycling always wins over hysteresis.
+  if ((context.candidateIndex ?? 0) === 0 && context.previousSnap && selected) {
+    const margin = Math.max(0, context.hysteresisPx ?? 2);
+    const previous = sorted.find(s =>
+      s.type === context.previousSnap!.type &&
+      distance(s.point, context.previousSnap!.point) <= 1e-5 &&
+      s.entityIds.some(id => context.previousSnap!.entityIds.includes(id))
+    );
+    if (previous && previous.type !== selected.type &&
+        PRIORITY[previous.type] === PRIORITY[selected.type] &&
+        previous.distancePx <= 10 + margin &&
+        previous.distancePx <= selected.distancePx + margin) selected = previous;
+  }
   let point=selected?.point ?? {...cursorWorld};
   const guides:Guide[]=[];
   const anchors: {point:Vec2;id:string}[]=[];
