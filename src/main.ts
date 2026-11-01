@@ -93,7 +93,7 @@ function render() {
   } else {
     hint.textContent = model.entities.length ? "" : "Choose a tool and click to start drawing";
   }
-  hint.classList.toggle("hidden", Boolean(model.entities.length || firstPoint));
+  hint.classList.toggle("hidden", Boolean(model.entities.length && !firstPoint));
   entityCount.textContent = model.entities.length + (model.entities.length === 1 ? " object" : " objects");
   zoomReadout.textContent = Math.round(view.scale*100) + "%";
   renderProperties();
@@ -175,6 +175,7 @@ svg.addEventListener("pointerdown",event=>{
   if(event.button===1 || spaceDown) { panning=true; panStart=screenPoint(event); viewStart={...view.origin}; svg.setPointerCapture(event.pointerId); event.preventDefault(); return; }
   if(event.button!==0) return;
   const point=toWorld(event);
+  pointerWorld = point;
   if(tool==="select") { nearestSelection(point); return; }
   const inferred=inferAt(point);
   const endpoint = firstPoint ? draftSession.resolve(firstPoint, inferred.point) : inferred.point;
@@ -222,7 +223,7 @@ window.addEventListener("keyup",event=>{if(event.code==="Space"){spaceDown=false
 document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.addEventListener("click",()=>setTool(button.dataset.tool as Tool)));
 document.querySelector("#delete-selection")?.addEventListener("click",()=>{if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}});
 document.querySelector("#toggle-snap")?.addEventListener("click",event=>{snapEnabled=!snapEnabled;(event.currentTarget as HTMLElement).classList.toggle("off",!snapEnabled);render();});
-document.querySelector("#new-project")?.addEventListener("click",()=>{if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;rebuildIndex();render();});
+document.querySelector("#new-project")?.addEventListener("click",()=>{if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;preview=null;draftSession.clear();rebuildIndex();render();});
 document.querySelector("#zoom-fit")?.addEventListener("click",()=>{
   if(!model.entities.length){const rect=svg.getBoundingClientRect();view={origin:{x:rect.width/2,y:rect.height/2},scale:.08};}
   else {const xs:number[]=[],ys:number[]=[];for(const e of model.entities){if("start" in e){xs.push(e.start.x,e.end.x);ys.push(e.start.y,e.end.y);}else if(e.type==="column"){xs.push(e.center.x-e.width/2,e.center.x+e.width/2);ys.push(e.center.y-e.height/2,e.center.y+e.height/2);}}if(xs.length){const rect=svg.getBoundingClientRect(),w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);view.scale=Math.min(3,Math.max(.0005,Math.min((rect.width-120)/(w+1000),(rect.height-120)/(h+1000))));view.origin={x:rect.width/2-(Math.min(...xs)+Math.max(...xs))/2*view.scale,y:rect.height/2+(Math.min(...ys)+Math.max(...ys))/2*view.scale};}}
