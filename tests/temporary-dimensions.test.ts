@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyDraftInput, calculateTemporaryDimensions, parseDraftInput } from "../src/interaction/temporary-dimensions";
+import { applyDraftInput, calculateTemporaryDimensions, parseDraftInput, TemporaryDimensionSession } from "../src/interaction/temporary-dimensions";
 
 describe("temporary dimension calculations", () => {
   it("reports signed offsets, length and angle", () => {
@@ -49,5 +49,53 @@ describe("temporary dimension calculations", () => {
     const point = applyDraftInput({ x: 100, y: 200 }, { x: 0, y: 0 }, { kind: "polar", length: 500, angleDeg: 90 });
     expect(point.x).toBeCloseTo(100);
     expect(point.y).toBeCloseTo(700);
+  });
+});
+
+describe("temporary dimension keyboard session", () => {
+  it("updates the resolved endpoint immediately as a length is typed", () => {
+    const session = new TemporaryDimensionSession();
+    for (const key of "250") session.append(key);
+    const point = session.resolve({ x: 0, y: 0 }, { x: 3, y: 4 });
+    expect(point?.x).toBeCloseTo(150);
+    expect(point?.y).toBeCloseTo(200);
+    expect(session.isValid).toBe(true);
+  });
+
+  it("updates the resolved endpoint when a degree-suffixed angle is completed", () => {
+    const session = new TemporaryDimensionSession();
+    for (const key of "90deg") session.append(key);
+    const point = session.resolve({ x: 10, y: 20 }, { x: 13, y: 24 });
+    expect(point?.x).toBeCloseTo(10);
+    expect(point?.y).toBeCloseTo(25);
+  });
+
+  it("supports polar input and rejects an incomplete value until completed", () => {
+    const session = new TemporaryDimensionSession();
+    for (const key of "@500<") session.append(key);
+    expect(session.resolve({ x: 0, y: 0 }, { x: 100, y: 0 })).toBeNull();
+    session.append("3");
+    session.append("0");
+    const point = session.resolve({ x: 0, y: 0 }, { x: 100, y: 0 });
+    expect(point?.x).toBeCloseTo(433.0127);
+    expect(point?.y).toBeCloseTo(250);
+  });
+
+  it("backspace repairs an invalid draft and clear cancels the input", () => {
+    const session = new TemporaryDimensionSession();
+    for (const key of "12x") session.append(key);
+    expect(session.isValid).toBe(false);
+    session.backspace();
+    expect(session.resolve({ x: 0, y: 0 }, { x: 5, y: 0 })).toEqual({ x: 12, y: 0 });
+    session.clear();
+    expect(session.isEmpty).toBe(true);
+    expect(session.resolve({ x: 0, y: 0 }, { x: 5, y: 0 })).toEqual({ x: 5, y: 0 });
+  });
+
+  it("ignores non-dimension keys so tool shortcuts remain available", () => {
+    const session = new TemporaryDimensionSession();
+    expect(session.append("v")).toBe(false);
+    expect(session.append("l")).toBe(false);
+    expect(session.isEmpty).toBe(true);
   });
 });
