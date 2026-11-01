@@ -92,3 +92,17 @@ export function calibrateReferenceImage(
     calibration: { actualDistanceMm, pointA: normalizedA, pointB: normalizedB },
   };
 }
+
+
+/** Converts normalized source-image coordinates to world coordinates. */
+export function referenceImageWorldPoint(reference: ReferenceImage, normalized: Vec2): Vec2 {
+  const height = referenceImageHeight(reference);
+  const left = reference.anchor === "center" ? -reference.widthMm / 2 : 0;
+  const top = reference.anchor === "center" ? height / 2 : 0;
+  const local = { x: left + normalized.x * reference.widthMm, y: top - normalized.y * height };
+  const angle = reference.rotation * Math.PI / 180;
+  return {
+    x: reference.position.x + local.x * Math.cos(angle) - local.y * Math.sin(angle),
+    y: reference.position.y + local.x * Math.sin(angle) + local.y * Math.cos(angle),
+  };
+}
