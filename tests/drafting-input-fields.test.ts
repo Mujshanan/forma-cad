@@ -19,6 +19,16 @@ describe("two-field drafting input", () => {
     expect(point?.y).toBeCloseTo(225);
   });
 
+  it("preserves the existing 30deg shorthand and does not leak suffix keys to shortcuts", () => {
+    const fields = new DraftingInputFields();
+    for (const key of "30deg") fields.append(key);
+    expect(fields.lengthText).toBe("");
+    expect(fields.angleText).toBe("30");
+    expect(fields.activeField).toBe("angle");
+    expect(fields.resolve({ x: 0, y: 0 }, { x: 10, y: 0 })?.x).toBeCloseTo(10 * Math.cos(Math.PI / 6));
+    expect(fields.resolve({ x: 0, y: 0 }, { x: 10, y: 0 })?.y).toBeCloseTo(5);
+  });
+
   it("uses the live pointer value for an empty field", () => {
     const fields = new DraftingInputFields();
     fields.tab();
