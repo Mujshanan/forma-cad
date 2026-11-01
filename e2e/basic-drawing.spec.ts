@@ -125,3 +125,34 @@ test("endpoint handles edit geometry and undo/redo restores changes", async ({ p
   await page.keyboard.press("Control+y");
   await expect(page.locator("#world-layer line.entity")).toHaveCount(1);
 });
+
+
+test("column tool draws a selectable structural column", async ({ page }) => {
+  await page.getByRole("button", { name: /Column/ }).click();
+  const a = await canvasPoint(page, 220, 180);
+  const b = await canvasPoint(page, 340, 290);
+  await page.mouse.click(a.x, a.y);
+  await page.mouse.move(b.x, b.y);
+  await expect(page.locator("#overlay-layer rect.preview-geometry")).toBeVisible();
+  await page.mouse.click(b.x, b.y);
+  await expect(page.locator("#world-layer rect.entity")).toHaveCount(1);
+  await expect(page.locator("#entity-count")).toHaveText("1 object");
+  await page.getByRole("button", { name: /Select/ }).click();
+  await page.mouse.click((a.x+b.x)/2, (a.y+b.y)/2);
+  await expect(page.locator("#world-layer rect.entity.selected")).toHaveCount(1);
+});
+
+test("circle tool draws a circle and supports undo/redo", async ({ page }) => {
+  await page.getByRole("button", { name: /Circle/ }).click();
+  const center = await canvasPoint(page, 260, 200);
+  const edge = await canvasPoint(page, 330, 250);
+  await page.mouse.click(center.x, center.y);
+  await page.mouse.move(edge.x, edge.y);
+  await expect(page.locator("#overlay-layer circle.preview-geometry")).toBeVisible();
+  await page.mouse.click(edge.x, edge.y);
+  await expect(page.locator("#world-layer circle.entity")).toHaveCount(1);
+  await page.keyboard.press("Control+z");
+  await expect(page.locator("#world-layer circle.entity")).toHaveCount(0);
+  await page.keyboard.press("Control+y");
+  await expect(page.locator("#world-layer circle.entity")).toHaveCount(1);
+});
