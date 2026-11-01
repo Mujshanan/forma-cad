@@ -71,7 +71,7 @@ function entitySvg(entity: Entity): string {
     const label = `L ${fmt(length)} mm  ·  ${fmt(angle)}°`;
     const dash = entity.type === "grid" ? ' stroke-dasharray="8 5"' : "";
     const width = entity.type === "beam" ? ' stroke-width="5"' : "";
-    return `<g><line ${attrs}${dash}${width} x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><text class="dimension-label persistent-dimension" x="${labelX}" y="${labelY}">${label}</text></g>`;
+    return `<g><line ${attrs}${dash}${width} x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/><text class="dimension-label persistent-dimension" transform="translate(0 ${2*labelY}) scale(1 -1)" x="${labelX}" y="${labelY}">${label}</text></g>`;
   }
   if (entity.type === "column") return `<rect ${attrs} x="${entity.center.x-entity.width/2}" y="${-entity.center.y-entity.height/2}" width="${entity.width}" height="${entity.height}" fill="${color}" fill-opacity=".12"/>`;
   if (entity.type === "circle") return `<circle ${attrs} cx="${entity.center.x}" cy="${-entity.center.y}" r="${entity.radius}"/>`;
@@ -99,7 +99,7 @@ function render() {
     const end = snapPoint(pointerWorld);
     const dx = end.x-firstPoint.x, dy = end.y-firstPoint.y;
     const length = Math.hypot(dx,dy), angle = (Math.atan2(dy,dx)*180/Math.PI+360)%360;
-    overlayLayer.innerHTML = `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${end.x}" y2="${-end.y}"/><text class="dimension-label listening-dimension" x="${(firstPoint.x+end.x)/2}" y="${-(firstPoint.y+end.y)/2-150/view.scale}">L ${fmt(length)} mm · ${fmt(angle)}°</text>`;
+    overlayLayer.innerHTML = `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${end.x}" y2="${-end.y}"/><text class="dimension-label listening-dimension" transform="translate(0 ${2*(-(firstPoint.y+end.y)/2-150/view.scale)}) scale(1 -1)" x="${(firstPoint.x+end.x)/2}" y="${-(firstPoint.y+end.y)/2-150/view.scale}">L ${fmt(length)} mm · ${fmt(angle)}°</text>`;
     hint.textContent = "Click to finish line · Esc to cancel";
     hint.classList.remove("hidden");
   } else {
