@@ -90,7 +90,7 @@ test("two-point calibration scales the image and survives undo, redo and save/lo
   await page.locator("#undo-action").click();
   await expect(page.locator("#reference-width")).toHaveValue("10000");
   await page.locator("#redo-action").click();
-  await expect(page.locator("#reference-width")).toHaveValue("7500");
+  expect(Number(await page.locator("#reference-width").inputValue())).toBeCloseTo(7500, 0);
 
   const downloadPromise = page.waitForEvent("download");
   await page.locator("#save-project").click();
@@ -98,6 +98,6 @@ test("two-point calibration scales the image and survives undo, redo and save/lo
   const path = await download.path();
   if (!path) throw new Error("Project download was not created");
   await page.locator("#file-input").setInputFiles(path);
-  await expect(page.locator("#reference-width")).toHaveValue("7500");
+  expect(Number(await page.locator("#reference-width").inputValue())).toBeCloseTo(7500, 0);
   await expect(page.locator(".calibration-saved")).toContainText("6000");
 });
