@@ -78,7 +78,7 @@ function lineEntities() {
   return model.entities.filter((entity): entity is Extract<Entity, { start: Vec2; end: Vec2 }> => "start" in entity && "end" in entity);
 }
 function snapPoint(point: Vec2): Vec2 {
-  if (!snapEnabled) return { ...point };
+  if (!snapEnabled) { referenceSnapState = null; return { ...point }; }
   // Only snap to actual, committed endpoints. No inference projections or alignment overrides.
   let best: Vec2 | null = null;
   let bestDistance = 10 / view.scale;
@@ -440,7 +440,7 @@ referenceFileInput.addEventListener("change",async()=>{
   } catch(error) { alert("Could not attach reference: "+(error instanceof Error?error.message:"Invalid image")); }
   referenceFileInput.value="";
 });
-referenceContent.addEventListener("click",event=>{
+referenceContent.addEventListener("click",async event=>{
   const target=event.target as HTMLElement;
   if(target.id==="calibrate-reference"){
     const reference=model.references.find(item=>item.id===selectedReferenceId);
