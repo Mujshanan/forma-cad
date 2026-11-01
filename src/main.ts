@@ -29,6 +29,7 @@ let pointerWorld: Vec2 = { x: 0, y: 0 };
 let preview: InferenceResult | null = null;
 const draftFields = new DraftingInputFields();
 const directionLock = new DirectionLock();
+const emptyIndex = new SpatialIndex(2000);
 let selectedId: string | null = null;
 let snapEnabled = true;
 let candidateIndex = 0;
@@ -125,7 +126,7 @@ function renderLayers() {
   layerList.innerHTML = model.layers.map(layer=>`<div class="layer-row"><span class="layer-swatch" style="background:${layer.color}"></span><span>${escapeHtml(layer.name)}</span><em>●</em></div>`).join("");
 }
 function setTool(next: Tool) {
-  tool = next; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); shiftDown = false; candidateIndex = 0; previousSnap = undefined; selectedId = null;
+  tool = next; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); candidateIndex = 0; previousSnap = undefined; selectedId = null;
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.classList.toggle("active",button.dataset.tool===next));
   toolName.textContent = next.charAt(0).toUpperCase()+next.slice(1);
   svg.style.cursor = next === "select" ? "default" : "crosshair";
@@ -133,7 +134,11 @@ function setTool(next: Tool) {
 }
 function inferAt(point: Vec2) {
   if (shiftDown && firstPoint && !directionLock.direction) directionLock.lock(firstPoint, point);
-  if (!snapEnabled) { previousSnap = undefined; return {point,snaps:[],guides:[]}; }
+  if (!snapEnabled) {
+    previousSnap = undefined;
+    if (!shiftDown || !firstPoint || !directionLock.direction) return {point,snaps:[],guides:[]};
+    return infer(point, { lastPoint:firstPoint, shift:true, direction:directionLock.direction }, emptyIndex, view.scale);
+  }
   const result = infer(point,{
     lastPoint:firstPoint ?? undefined,
     shift:shiftDown,
@@ -145,7 +150,7 @@ function inferAt(point: Vec2) {
   return result;
 }
 function addEntity(entity: Entity) {
-  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); shiftDown = false; previousSnap = undefined; candidateIndex = 0; render();
+  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); previousSnap = undefined; candidateIndex = 0; render();
 }
 function commitAt(point: Vec2) {
   if (tool === "column") {
