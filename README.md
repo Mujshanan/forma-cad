@@ -252,6 +252,7 @@ npm run dev
 - `npm run test:watch`: run tests in watch mode.
 - `npm run check`: TypeScript validation.
 - `npm run build`: TypeScript project build and Vite production build.
+- `npm run test:e2e`: launch Chromium and exercise real canvas pointer/keyboard workflows through Playwright.
 
 ### Continuous integration
 
@@ -300,7 +301,8 @@ A feature is done only when:
 - [x] Connect typed length, angle and polar input to the drawing keyboard; preview updates while typing, Enter commits and Escape cancels.
 - [x] Test drafting-session input, invalid-value rejection, backspace recovery, cancellation/reset and shortcut-key precedence.
 - [ ] Add robust editing, undo/redo, layer controls and DXF export.
-- [ ] Add browser end-to-end tests and Windows desktop packaging.
+- [x] Add browser end-to-end tests for typed length, typed angle, Enter commit and Escape cancellation.
+- [ ] Windows desktop packaging.
 
 ## Contributing
 
