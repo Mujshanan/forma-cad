@@ -392,3 +392,10 @@ button:focus-visible, a:focus-visible {
   .quiet { padding: 7px 6px; font-size: 10px; }
   .statusbar { gap: 10px; overflow: hidden; white-space: nowrap; }
 }
+
+.endpoint-handle {
+  cursor: grab;
+  pointer-events: all;
+}
+.endpoint-handle:active { cursor: grabbing; }
+.snap-point { pointer-events: none; }
