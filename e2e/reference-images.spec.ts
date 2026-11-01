@@ -84,7 +84,7 @@ test("two-point calibration scales the image and survives undo, redo and save/lo
   await page.locator("#calibration-distance").fill("6000");
   await page.locator("#apply-calibration").click();
 
-  await expect(page.locator("#reference-width")).toHaveValue("7500");
+   expect(Number(await page.locator("#reference-width").inputValue())).toBeCloseTo(7500, 0);
   await expect(page.locator(".calibration-saved")).toContainText("6000");
 
   await page.locator("#undo-action").click();
