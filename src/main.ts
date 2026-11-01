@@ -28,6 +28,31 @@ let panning = false;
 let panStart: Vec2 | null = null;
 let viewStart: Vec2 | null = null;
 let nextId = 1;
+let dragEndpoint: { id: string; endpoint: "start" | "end" } | null = null;
+type HistoryState = { entities: Entity[]; selectedId: string | null; nextId: number };
+const undoStack: HistoryState[] = [];
+const redoStack: HistoryState[] = [];
+const cloneEntities = () => JSON.parse(JSON.stringify(model.entities)) as Entity[];
+function historyState(): HistoryState { return { entities: cloneEntities(), selectedId, nextId }; }
+function pushUndo() { undoStack.push(historyState()); if (undoStack.length > 100) undoStack.shift(); redoStack.length = 0; }
+function restoreHistory(state: HistoryState) {
+  model.entities.splice(0, model.entities.length, ...JSON.parse(JSON.stringify(state.entities)) as Entity[]);
+  selectedId = state.selectedId; nextId = state.nextId; firstPoint = null; dragEndpoint = null; render(); updateHistoryButtons();
+}
+function undo() {
+  if (!undoStack.length) return;
+  redoStack.push(historyState()); restoreHistory(undoStack.pop()!);
+}
+function redo() {
+  if (!redoStack.length) return;
+  undoStack.push(historyState()); restoreHistory(redoStack.pop()!);
+}
+function updateHistoryButtons() {
+  const undoButton = document.querySelector<HTMLButtonElement>("#undo-action");
+  const redoButton = document.querySelector<HTMLButtonElement>("#redo-action");
+  if (undoButton) undoButton.disabled = undoStack.length === 0;
+  if (redoButton) redoButton.disabled = redoStack.length === 0;
+}
 
 const colors: Record<string, string> = Object.fromEntries(model.layers.map(layer => [layer.name, layer.color]));
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] ?? char);
@@ -106,6 +131,18 @@ function render() {
     hint.textContent = model.entities.length ? "" : "Choose Line, then click twice to draw";
     hint.classList.toggle("hidden", model.entities.length > 0);
   }
+  // Screen-sized endpoint handles stay easy to grab at any zoom level.
+  const selected = model.entities.find(entity => entity.id === selectedId);
+  if (selected && "start" in selected && "end" in selected) {
+    overlayLayer.insertAdjacentHTML("beforeend",
+      `<circle class="endpoint-handle selected-handle" data-endpoint-handle="${selected.id}" data-endpoint="start" cx="${selected.start.x}" cy="${-selected.start.y}" r="${7 / view.scale}"/><circle class="endpoint-handle selected-handle" data-endpoint-handle="${selected.id}" data-endpoint="end" cx="${selected.end.x}" cy="${-selected.end.y}" r="${7 / view.scale}"/>`);
+  }
+  // Make a successful endpoint snap explicit rather than silently moving the cursor.
+  const snappedPointer = snapPoint(pointerWorld);
+  if (distance(snappedPointer, pointerWorld) > 0.001) {
+    overlayLayer.insertAdjacentHTML("beforeend",
+      `<circle class="snap-point is-snapped" data-testid="snap-indicator" cx="${snappedPointer.x}" cy="${-snappedPointer.y}" r="${6 / view.scale}"/>`);
+  }
   const bg = document.querySelector<SVGRectElement>(".canvas-background");
   if (bg) bg.style.opacity = gridVisible ? "1" : "0";
   coordinateReadout.textContent = `X ${fmt(pointerWorld.x)} · Y ${fmt(pointerWorld.y)} mm`;
@@ -157,15 +194,30 @@ function fitDrawing() {
 }
 function commitLine(end: Vec2) {
   if (!firstPoint || distance(firstPoint,end) < 0.01) return;
+  pushUndo();
   const start={...firstPoint};
   model.entities.push({id:"L"+nextId++,type:"line",layer:"S-ANNO",start,end:{...end}});
-  firstPoint=null; selectedId=model.entities[model.entities.length-1].id; render();
+  firstPoint=null; selectedId=model.entities[model.entities.length-1].id; render(); updateHistoryButtons();
+}
+function deleteSelection() {
+  if (!selectedId) return;
+  const index = model.entities.findIndex(entity => entity.id === selectedId);
+  if (index < 0) { selectedId = null; render(); return; }
+  pushUndo(); model.entities.splice(index, 1); selectedId = null; render(); updateHistoryButtons();
 }
 function isEditableTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && (target.isContentEditable || Boolean(target.closest("input,textarea,select,[contenteditable=true]")));
 }
 
 svg.addEventListener("pointerdown", event => {
+  const handle = (event.target as Element | null)?.closest<SVGCircleElement>(".endpoint-handle");
+  if (event.button === 0 && handle) {
+    const id = handle.dataset.endpointHandle;
+    const endpoint = handle.dataset.endpoint;
+    if (id && (endpoint === "start" || endpoint === "end")) {
+      pushUndo(); dragEndpoint = { id, endpoint }; svg.setPointerCapture(event.pointerId); event.preventDefault(); return;
+    }
+  }
   if (event.button===1 || spaceDown) { panning=true; panStart=screenPoint(event); viewStart={...view.origin}; svg.setPointerCapture(event.pointerId); event.preventDefault(); return; }
   if (event.button!==0) return;
   const raw=toWorld(event); pointerWorld=raw;
@@ -174,12 +226,17 @@ svg.addEventListener("pointerdown", event => {
   commitLine(snapPoint(raw));
 });
 svg.addEventListener("pointermove", event => {
+  if (dragEndpoint) {
+    const entity = model.entities.find(item => item.id === dragEndpoint!.id);
+    if (entity && "start" in entity && "end" in entity) entity[dragEndpoint.endpoint] = toWorld(event);
+    pointerWorld = toWorld(event); render(); return;
+  }
   if (panning && panStart && viewStart) {
     const p=screenPoint(event); view.origin={x:viewStart.x+p.x-panStart.x,y:viewStart.y+p.y-panStart.y}; render(); return;
   }
   pointerWorld=toWorld(event); render();
 });
-svg.addEventListener("pointerup",()=>{panning=false;panStart=null;viewStart=null;});
+svg.addEventListener("pointerup",()=>{panning=false;panStart=null;viewStart=null;dragEndpoint=null;updateHistoryButtons();});
 svg.addEventListener("wheel",event=>{
   event.preventDefault(); view=zoomAt(view,screenPoint(event as unknown as PointerEvent),event.deltaY<0?1.12:1/1.12); render();
 },{passive:false});
@@ -187,9 +244,11 @@ window.addEventListener("keydown",event=>{
   if(isEditableTarget(event.target)) return;
   if(event.code==="Space"){spaceDown=true;svg.style.cursor="grab";}
   if(event.key==="Escape" && firstPoint){firstPoint=null;render();return;}
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); if (event.shiftKey) redo(); else undo(); return; }
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") { event.preventDefault(); redo(); return; }
   if(event.key==="Home"){event.preventDefault();fitDrawing();}
   if(event.key==="Delete"||event.key==="Backspace"){
-    if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;render();}
+    deleteSelection();
   }
   if(event.key.toLowerCase()==="v") setTool("select");
   if(event.key.toLowerCase()==="l") setTool("line");
@@ -200,7 +259,9 @@ window.addEventListener("keydown",event=>{
 window.addEventListener("keyup",event=>{if(event.code==="Space"){spaceDown=false;svg.style.cursor=tool==="select"?"default":"crosshair";}});
 window.addEventListener("blur",()=>{spaceDown=false;panning=false;svg.style.cursor=tool==="select"?"default":"crosshair";});
 document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.addEventListener("click",()=>setTool(button.dataset.tool as Tool)));
-document.querySelector("#delete-selection")?.addEventListener("click",()=>{if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;render();}});
+document.querySelector("#delete-selection")?.addEventListener("click", deleteSelection);
+document.querySelector("#undo-action")?.addEventListener("click", undo);
+document.querySelector("#redo-action")?.addEventListener("click", redo);
 document.querySelector("#toggle-snap")?.addEventListener("click",event=>{
   snapEnabled=!snapEnabled;(event.currentTarget as HTMLElement).classList.toggle("off",!snapEnabled);render();
 });
@@ -209,7 +270,7 @@ document.querySelector("#toggle-grid")?.addEventListener("click",event=>{
 });
 document.querySelector("#new-project")?.addEventListener("click",()=>{
   if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;
-  model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;render();
+  pushUndo(); model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;render();updateHistoryButtons();
 });
 document.querySelector("#zoom-fit")?.addEventListener("click",fitDrawing);
 document.querySelector("#save-project")?.addEventListener("click",()=>{
@@ -223,8 +284,8 @@ fileInput.addEventListener("change",async()=>{
   try {
     const parsed=JSON.parse(await file.text()) as {units?:string;entities?:Entity[];layers?:DocumentModel["layers"]};
     if(parsed.units!=="mm"||!Array.isArray(parsed.entities)||!Array.isArray(parsed.layers))throw new Error("Unsupported project file");
-    model.entities.splice(0,model.entities.length,...parsed.entities);model.layers.splice(0,model.layers.length,...parsed.layers);
-    nextId=model.entities.length+1;selectedId=null;rebuildLayers();render();fitDrawing();
+    pushUndo(); model.entities.splice(0,model.entities.length,...parsed.entities);model.layers.splice(0,model.layers.length,...parsed.layers);
+    nextId=model.entities.length+1;selectedId=null;rebuildLayers();render();updateHistoryButtons();fitDrawing();updateHistoryButtons();
   } catch(error) { alert("Could not open project: "+(error instanceof Error?error.message:"Invalid JSON")); }
   fileInput.value="";
 });
