@@ -49,6 +49,7 @@ The geometry and inference core must remain independent of the browser DOM and r
 - `src/core/spatial.ts`: uniform-grid spatial hash for nearby entity lookup.
 - `src/core/references.ts`: reusable world-space reference points and segments for structural entities.
 - `src/core/inference.ts`: snap candidates, deterministic ranking, snap hysteresis, tolerance handling and tracking-guide calculation.
+- `src/interaction/temporary-dimensions.ts`: independent live dimension calculations, typed length/angle/polar parsing and a keyboard drafting session; constrains transient preview points without mutating geometry or inference state.
 - `src/core/view.ts`: pure world/screen transforms and cursor-anchored zoom.
 - `src/tools/` (planned): isolated stateful drawing tools.
 - `src/interaction/` (planned): pointer/keyboard input, tracking state and tool lifecycle.
@@ -251,6 +252,7 @@ npm run dev
 - `npm run test:watch`: run tests in watch mode.
 - `npm run check`: TypeScript validation.
 - `npm run build`: TypeScript project build and Vite production build.
+- `npm run test:e2e`: launch Chromium and exercise real canvas pointer/keyboard workflows through Playwright.
 
 ### Continuous integration
 
@@ -294,9 +296,13 @@ A feature is done only when:
 - [x] Initial select, line, grid, column, beam and wall drawing interactions.
 - [x] Initial snap markers, alignment-guide overlay and live length/angle preview labels.
 - [x] Basic JSON project save/open.
-- [ ] Improve guide tracking, snap stability and temporary dimension input.
+- [x] Extract live temporary-dimension calculations from the canvas renderer into an independently tested interaction module.
+- [x] Add typed length, angle and polar-input parsing/application primitives without coupling them to inference.
+- [x] Connect typed length, angle and polar input to the drawing keyboard; preview updates while typing, Enter commits and Escape cancels.
+- [x] Test drafting-session input, invalid-value rejection, backspace recovery, cancellation/reset and shortcut-key precedence.
 - [ ] Add robust editing, undo/redo, layer controls and DXF export.
-- [ ] Add browser end-to-end tests and Windows desktop packaging.
+- [x] Add browser end-to-end tests for typed length, typed angle, Enter commit and Escape cancellation.
+- [ ] Windows desktop packaging.
 
 ## Contributing
 
