@@ -132,16 +132,18 @@ test("analyzed calibrated plan provides raster endpoint snapping while drafting"
   await page.mouse.click(bounds.x + bounds.width * 0.9, bounds.y + bounds.height * 0.3);
   await page.locator("#calibration-distance").fill("6000");
   await page.locator("#apply-calibration").click();
+  const calibratedBounds = await image.boundingBox();
+  if (!calibratedBounds) throw new Error("Calibrated reference image is not visible");
 
   await page.locator("#analyze-reference").click();
   await expect(page.locator(".reference-analysis-status")).toContainText("detected line segments");
   await expect(page.locator("#snap-readout")).toContainText("REFERENCES");
 
   await page.getByRole("button", { name: /Line/ }).click();
-  const startX = bounds.x + bounds.width * 0.25;
-  const startY = bounds.y + bounds.height * 0.75;
-  const nearEndpointX = bounds.x + bounds.width * 0.1;
-  const nearEndpointY = bounds.y + bounds.height * 0.3;
+  const startX = calibratedBounds.x + calibratedBounds.width * 0.25;
+  const startY = calibratedBounds.y + calibratedBounds.height * 0.75;
+  const nearEndpointX = calibratedBounds.x + calibratedBounds.width * 0.1;
+  const nearEndpointY = calibratedBounds.y + calibratedBounds.height * 0.3;
   await page.mouse.click(startX, startY);
   await page.mouse.move(nearEndpointX + 2, nearEndpointY + 2);
   await expect(page.locator(".snap-point.is-snapped")).toBeVisible();
