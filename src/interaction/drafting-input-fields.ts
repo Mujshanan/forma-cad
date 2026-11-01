@@ -25,6 +25,16 @@ export class DraftingInputFields {
   }
 
   append(character: string): boolean {
+    const key = character.toLowerCase();
+    // Preserve the existing "30deg" shorthand when the user starts in Length.
+    if (key === "d" && this.activeField === "length" && this.lengthText !== "" && this.angleText === "") {
+      this.angleText = this.lengthText;
+      this.lengthText = "";
+      this.activeField = "angle";
+      return true;
+    }
+    // The suffix is descriptive only; the active Angle field already carries the value.
+    if (this.activeField === "angle" && (key === "e" || key === "g")) return true;
     if (!/^[0-9.+-]$/.test(character)) return false;
     const current = this.activeField === "length" ? this.lengthText : this.angleText;
     const next = current + character;
