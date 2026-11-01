@@ -1,7 +1,7 @@
 import { infer, type InferenceResult, type Snap } from "./core/inference";
 import { createDocument, type Entity, type DocumentModel } from "./core/model";
 import type { Vec2 } from "./core/geometry";
-import { SpatialIndex } from "./core/spatial";
+import { SpatialIndex, entityBounds } from "./core/spatial";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import { calculateTemporaryDimensions } from "./interaction/temporary-dimensions";
 import { DraftingInputFields } from "./interaction/drafting-input-fields";
@@ -36,6 +36,7 @@ const alignmentTracker = new AlignmentTracker();
 let selectedId: string | null = null;
 let snapEnabled = true;
 let orthogonalEnabled = true;
+let autoFitEnabled = false;
 let candidateIndex = 0;
 let previousSnap: Snap | undefined;
 let spaceDown = false;
@@ -155,8 +156,32 @@ function inferAt(point: Vec2) {
   }
   return result;
 }
+function fitDrawing() {
+  const rect = svg.getBoundingClientRect();
+  if (!model.entities.length) {
+    view = { origin: { x: rect.width / 2, y: rect.height / 2 }, scale: 0.08 };
+    render();
+    return;
+  }
+  const bounds = model.entities.map(entityBounds);
+  const minX = Math.min(...bounds.map(b => b.minX));
+  const minY = Math.min(...bounds.map(b => b.minY));
+  const maxX = Math.max(...bounds.map(b => b.maxX));
+  const maxY = Math.max(...bounds.map(b => b.maxY));
+  const padding = 1000;
+  const width = Math.max(maxX - minX, 1) + padding * 2;
+  const height = Math.max(maxY - minY, 1) + padding * 2;
+  view.scale = Math.min(3, Math.max(0.0005, Math.min((rect.width - 120) / width, (rect.height - 120) / height)));
+  view.origin = {
+    x: rect.width / 2 - (minX + maxX) / 2 * view.scale,
+    y: rect.height / 2 + (minY + maxY) / 2 * view.scale
+  };
+  render();
+}
 function addEntity(entity: Entity) {
-  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); alignmentTracker.clear(); previousSnap = undefined; candidateIndex = 0; render();
+  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); alignmentTracker.clear(); previousSnap = undefined; candidateIndex = 0;
+  if (autoFitEnabled) fitDrawing();
+  render();
 }
 function commitAt(point: Vec2) {
   if (tool === "column") {
@@ -246,6 +271,7 @@ window.addEventListener("keydown",event=>{
     if(draftFields.append(event.key)){event.preventDefault();render();return;}
   }
   if(event.key==="Delete"||event.key==="Backspace"){if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}}
+  if(event.key==="Home"){event.preventDefault();fitDrawing();}
   if(event.key==="F8"){
     orthogonalEnabled=!orthogonalEnabled;
     document.querySelector<HTMLElement>("#toggle-ortho")?.classList.toggle("off",!orthogonalEnabled);
@@ -293,11 +319,12 @@ document.querySelector("#toggle-snap")?.addEventListener("click",event=>{
   render();
 });
 document.querySelector("#new-project")?.addEventListener("click",()=>{if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;preview=null;draftFields.clear();alignmentTracker.clear();directionLock.clear();rebuildIndex();render();});
-document.querySelector("#zoom-fit")?.addEventListener("click",()=>{
-  if(!model.entities.length){const rect=svg.getBoundingClientRect();view={origin:{x:rect.width/2,y:rect.height/2},scale:.08};}
-  else {const xs:number[]=[],ys:number[]=[];for(const e of model.entities){if("start" in e){xs.push(e.start.x,e.end.x);ys.push(e.start.y,e.end.y);}else if(e.type==="column"){xs.push(e.center.x-e.width/2,e.center.x+e.width/2);ys.push(e.center.y-e.height/2,e.center.y+e.height/2);}}if(xs.length){const rect=svg.getBoundingClientRect(),w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);view.scale=Math.min(3,Math.max(.0005,Math.min((rect.width-120)/(w+1000),(rect.height-120)/(h+1000))));view.origin={x:rect.width/2-(Math.min(...xs)+Math.max(...xs))/2*view.scale,y:rect.height/2+(Math.min(...ys)+Math.max(...ys))/2*view.scale};}}
-  render();
+document.querySelector("#zoom-fit")?.addEventListener("click",fitDrawing);
+document.querySelector("#toggle-auto-fit")?.addEventListener("click",event=>{
+  autoFitEnabled=!autoFitEnabled;
+  (event.currentTarget as HTMLElement).classList.toggle("off",!autoFitEnabled);
 });
+
 document.querySelector("#save-project")?.addEventListener("click",()=>{
   const blob=new Blob([JSON.stringify({version:1,...model},null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="forma-cad-project.json";a.click();URL.revokeObjectURL(url);
