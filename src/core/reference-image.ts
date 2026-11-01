@@ -37,3 +37,58 @@ export function referenceImageLocalOffset(reference: ReferenceImage): Vec2 {
     ? { x: -reference.widthMm / 2, y: -height / 2 }
     : { x: 0, y: 0 };
 }
+
+const rotate = (point: Vec2, angle: number): Vec2 => ({
+  x: point.x * Math.cos(angle) - point.y * Math.sin(angle),
+  y: point.x * Math.sin(angle) + point.y * Math.cos(angle),
+});
+
+/** Converts a world-space pick into normalized image coordinates, or null outside the image. */
+export function referenceImageNormalizedPoint(reference: ReferenceImage, worldPoint: Vec2): Vec2 | null {
+  const height = referenceImageHeight(reference);
+  const angle = -reference.rotation * Math.PI / 180;
+  const local = rotate({ x: worldPoint.x - reference.position.x, y: worldPoint.y - reference.position.y }, angle);
+  const left = reference.anchor === "center" ? -reference.widthMm / 2 : 0;
+  const top = reference.anchor === "center" ? height / 2 : 0;
+  const x = (local.x - left) / reference.widthMm;
+  const y = (top - local.y) / height;
+  const epsilon = 1e-6;
+  if (x < -epsilon || x > 1 + epsilon || y < -epsilon || y > 1 + epsilon) return null;
+  return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+}
+
+/**
+ * Scales an image so two picked points match a known distance. The first picked
+ * point remains fixed in world space, regardless of image anchor or rotation.
+ */
+export function calibrateReferenceImage(
+  reference: ReferenceImage,
+  pointA: Vec2,
+  pointB: Vec2,
+  actualDistanceMm: number,
+): ReferenceImage {
+  if (!Number.isFinite(actualDistanceMm) || actualDistanceMm <= 0) {
+    throw new Error("Calibration distance must be a positive number");
+  }
+  const measuredDistance = Math.hypot(pointB.x - pointA.x, pointB.y - pointA.y);
+  if (!Number.isFinite(measuredDistance) || measuredDistance <= 1e-9) {
+    throw new Error("Calibration points must be different");
+  }
+  const normalizedA = referenceImageNormalizedPoint(reference, pointA);
+  const normalizedB = referenceImageNormalizedPoint(reference, pointB);
+  if (!normalizedA || !normalizedB) throw new Error("Calibration points must be inside the reference image");
+
+  const factor = actualDistanceMm / measuredDistance;
+  const widthMm = reference.widthMm * factor;
+  const heightMm = referenceImageHeight({ ...reference, widthMm });
+  const left = reference.anchor === "center" ? -widthMm / 2 : 0;
+  const top = reference.anchor === "center" ? heightMm / 2 : 0;
+  const localA = { x: left + normalizedA.x * widthMm, y: top - normalizedA.y * heightMm };
+  const rotatedA = rotate(localA, reference.rotation * Math.PI / 180);
+  return {
+    ...reference,
+    widthMm,
+    position: { x: pointA.x - rotatedA.x, y: pointA.y - rotatedA.y },
+    calibration: { actualDistanceMm, pointA: normalizedA, pointB: normalizedB },
+  };
+}
