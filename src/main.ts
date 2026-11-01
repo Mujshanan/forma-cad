@@ -93,7 +93,7 @@ function render() {
       const dimensions = calculateTemporaryDimensions(firstPoint, p);
       const mid = {x:(p.x+firstPoint.x)/2,y:(p.y+firstPoint.y)/2};
       const label = `${draftFields.lengthText || fmt(dimensions.length)} mm · ${draftFields.angleText || fmt(dimensions.angleDeg)}°`;
-      overlayLayer.innerHTML += `<text class="dimension-label listening-dimension" x="${mid.x}" y="${-mid.y-28/view.scale}">${escapeHtml(label)}</text>`;
+      overlayLayer.innerHTML += `<text class="dimension-label listening-dimension" x="${p.x+14/view.scale}" y="${-p.y-18/view.scale}">${escapeHtml(label)}</text>`;
       const tag = tool === "column" ? "Column preview" : tool === "grid" ? "Grid preview" : tool === "beam" ? "Beam preview" : tool === "wall" ? "Wall preview" : "Line preview";
       if (tool === "column") overlayLayer.innerHTML += `<rect class="preview-geometry" x="${p.x-200}" y="${-p.y-200}" width="400" height="400"/>`;
       else overlayLayer.innerHTML += `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${p.x}" y2="${-p.y}"/>`;
@@ -141,9 +141,9 @@ function inferAt(point: Vec2) {
     previousSnap = undefined;
     result = (!shiftDown || !firstPoint || !directionLock.direction)
       ? { point, snaps: [], guides: [] }
-      : infer(point, { lastPoint:firstPoint, shift:true, direction:directionLock.direction, alignmentTracker }, emptyIndex, view.scale);
+      : infer(point, { lastPoint:firstPoint, shift:true, direction:directionLock.direction, polarIncrementDeg:orthogonalEnabled ? 90 : 15, alignmentTracker }, emptyIndex, view.scale);
   } else {
-    result = infer(point,{ lastPoint:firstPoint ?? undefined, shift:shiftDown, direction:directionLock.direction ?? undefined, candidateIndex, previousSnap, alignmentTracker },index,view.scale);
+    result = infer(point,{ lastPoint:firstPoint ?? undefined, shift:shiftDown, direction:directionLock.direction ?? undefined, polarIncrementDeg:orthogonalEnabled ? 90 : 15, candidateIndex, previousSnap, alignmentTracker },index,view.scale);
     previousSnap = result.snaps.find(s => s.point.x === result.point.x && s.point.y === result.point.y);
   }
   if (firstPoint && orthogonalEnabled && !shiftDown && draftFields.isEmpty) {
