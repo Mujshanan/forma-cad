@@ -68,7 +68,13 @@ export class TemporaryDimensionSession {
   get isValid(): boolean { return this.isEmpty || parseDraftInput(this.text) !== null; }
 
   append(character: string): boolean {
-    if (!/^[0-9.+@<°-]$/.test(character) && !["d", "e", "g"].includes(character.toLowerCase())) return false;
+    const key = character.toLowerCase();
+    const numeric = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
+    const allowedSymbol = /^[0-9.+@<°-]$/.test(character);
+    const allowedSuffix = (key === "d" && numeric.test(this.text))
+      || (key === "e" && /d$/i.test(this.text))
+      || (key === "g" && /de$/i.test(this.text));
+    if (!allowedSymbol && !allowedSuffix) return false;
     this.text += character;
     return true;
   }
