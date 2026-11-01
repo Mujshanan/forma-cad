@@ -67,7 +67,7 @@ describe("inference",()=>{
    {name:"endpoint",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"E",type:"line" as const,layer:"S-BEAM",start:{x:0,y:0},end:{x:1000,y:0}});return x;})(),cursor:{x:0,y:15}},
    {name:"midpoint",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"M",type:"line" as const,layer:"S-BEAM",start:{x:0,y:0},end:{x:1000,y:0}});return x;})(),cursor:{x:500,y:15}},
    {name:"center",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"C",type:"column" as const,layer:"S-COLS",center:{x:0,y:0},width:100,height:100});return x;})(),cursor:{x:0,y:15}},
-   {name:"intersection",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"I1",type:"line" as const,layer:"S-BEAM",start:{x:-100,y:0},end:{x:100,y:0}});x.insert({id:"I2",type:"line" as const,layer:"S-BEAM",start:{x:0,y:-100},end:{x:0,y:100}});return x;})(),cursor:{x:0,y:15}},
+   {name:"intersection",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"I1",type:"line" as const,layer:"S-BEAM",start:{x:-100,y:0},end:{x:100,y:0}});x.insert({id:"I2",type:"line" as const,layer:"S-BEAM",start:{x:0,y:-100},end:{x:0,y:100}});return x;})(),cursor:{x:15,y:15}},
    {name:"perpendicular",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"P",type:"line" as const,layer:"S-BEAM",start:{x:-1000,y:0},end:{x:1000,y:0}});return x;})(),cursor:{x:0,y:15},lastPoint:{x:0,y:100}},
    {name:"nearest",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"N",type:"circle" as const,layer:"S-ANNO",center:{x:0,y:0},radius:100});return x;})(),cursor:{x:0,y:115}},
    {name:"grid",index:(()=>{const x=new SpatialIndex(1000);x.insert({id:"G",type:"grid" as const,layer:"S-GRID",start:{x:0,y:0},end:{x:1000,y:0}});return x;})(),cursor:{x:500,y:15}}
