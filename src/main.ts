@@ -5,6 +5,7 @@ import { SpatialIndex } from "./core/spatial";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import { calculateTemporaryDimensions } from "./interaction/temporary-dimensions";
 import { DraftingInputFields } from "./interaction/drafting-input-fields";
+import { DirectionLock } from "./interaction/direction-lock";
 import "./style.css";
 
 type Tool = "select" | "line" | "grid" | "column" | "beam" | "wall";
@@ -27,6 +28,8 @@ let firstPoint: Vec2 | null = null;
 let pointerWorld: Vec2 = { x: 0, y: 0 };
 let preview: InferenceResult | null = null;
 const draftFields = new DraftingInputFields();
+const directionLock = new DirectionLock();
+const emptyIndex = new SpatialIndex(2000);
 let selectedId: string | null = null;
 let snapEnabled = true;
 let candidateIndex = 0;
@@ -123,17 +126,23 @@ function renderLayers() {
   layerList.innerHTML = model.layers.map(layer=>`<div class="layer-row"><span class="layer-swatch" style="background:${layer.color}"></span><span>${escapeHtml(layer.name)}</span><em>●</em></div>`).join("");
 }
 function setTool(next: Tool) {
-  tool = next; firstPoint = null; preview = null; draftFields.clear(); candidateIndex = 0; previousSnap = undefined; selectedId = null;
+  tool = next; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); candidateIndex = 0; previousSnap = undefined; selectedId = null;
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.classList.toggle("active",button.dataset.tool===next));
   toolName.textContent = next.charAt(0).toUpperCase()+next.slice(1);
   svg.style.cursor = next === "select" ? "default" : "crosshair";
   render();
 }
 function inferAt(point: Vec2) {
-  if (!snapEnabled) { previousSnap = undefined; return {point,snaps:[],guides:[]}; }
+  if (shiftDown && firstPoint && !directionLock.direction) directionLock.lock(firstPoint, point);
+  if (!snapEnabled) {
+    previousSnap = undefined;
+    if (!shiftDown || !firstPoint || !directionLock.direction) return {point,snaps:[],guides:[]};
+    return infer(point, { lastPoint:firstPoint, shift:true, direction:directionLock.direction }, emptyIndex, view.scale);
+  }
   const result = infer(point,{
     lastPoint:firstPoint ?? undefined,
     shift:shiftDown,
+    direction:directionLock.direction ?? undefined,
     candidateIndex,
     previousSnap,
   },index,view.scale);
@@ -141,14 +150,14 @@ function inferAt(point: Vec2) {
   return result;
 }
 function addEntity(entity: Entity) {
-  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftFields.clear(); previousSnap = undefined; candidateIndex = 0; render();
+  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); previousSnap = undefined; candidateIndex = 0; render();
 }
 function commitAt(point: Vec2) {
   if (tool === "column") {
     addEntity({id:"C"+nextId++,type:"column",layer:"S-COLS",center:point,width:400,height:400});
     return;
   }
-  if (!firstPoint) { firstPoint = point; draftFields.clear(); return; }
+  if (!firstPoint) { firstPoint = point; draftFields.clear(); directionLock.clear(); if (shiftDown) directionLock.lock(firstPoint, pointerWorld); return; }
   if (Math.hypot(point.x-firstPoint.x,point.y-firstPoint.y) < 0.01) return;
   const id = "E"+nextId++;
   if (tool === "grid") addEntity({id,type:"grid",layer:"S-GRID",start:firstPoint,end:point,label:"Grid "+id.slice(1)});
@@ -209,10 +218,10 @@ svg.addEventListener("wheel",event=>{
 window.addEventListener("keydown",event=>{
   if(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
   if(event.code==="Space"){spaceDown=true;svg.style.cursor="grab";}
-  if(event.key==="Shift") shiftDown=true;
+  if(event.key==="Shift" && !shiftDown) { shiftDown=true; if(firstPoint) directionLock.lock(firstPoint,pointerWorld); }
   if(event.key==="Tab" && firstPoint){event.preventDefault();draftFields.tab(event.shiftKey);render();return;}
   if(event.key==="Tab" && preview?.snaps.length){event.preventDefault();candidateIndex=(candidateIndex+1)%preview.snaps.length;preview=inferAt(pointerWorld);render();return;}
-  if(event.key==="Escape"){if(firstPoint||!draftFields.isEmpty){firstPoint=null;preview=null;draftFields.clear();previousSnap=undefined;render();}return;}
+  if(event.key==="Escape"){if(firstPoint||!draftFields.isEmpty){firstPoint=null;preview=null;draftFields.clear();directionLock.clear();previousSnap=undefined;render();}return;}
   if(event.key==="Enter" && firstPoint && preview){
     event.preventDefault();
     const endpoint=draftFields.commit(firstPoint,preview.point);
@@ -228,7 +237,7 @@ window.addEventListener("keydown",event=>{
   const keys:Record<string,Tool>={v:"select",l:"line",g:"grid",c:"column",b:"beam",w:"wall"};
   const next=keys[event.key.toLowerCase()];if(next)setTool(next);
 });
-window.addEventListener("keyup",event=>{if(event.code==="Space"){spaceDown=false;svg.style.cursor=tool==="select"?"default":"crosshair";}if(event.key==="Shift")shiftDown=false;});
+window.addEventListener("keyup",event=>{if(event.code==="Space"){spaceDown=false;svg.style.cursor=tool==="select"?"default":"crosshair";}if(event.key==="Shift"){shiftDown=false;directionLock.clear();if(firstPoint)preview=inferAt(pointerWorld);render();}});
 document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.addEventListener("click",()=>setTool(button.dataset.tool as Tool)));
 document.querySelector("#delete-selection")?.addEventListener("click",()=>{if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}});
 document.querySelector("#toggle-snap")?.addEventListener("click",event=>{snapEnabled=!snapEnabled;(event.currentTarget as HTMLElement).classList.toggle("off",!snapEnabled);render();});
