@@ -286,6 +286,7 @@ A feature is done only when:
 - [x] Add guide-tracking tests for perpendicular snaps, extension, parallel/perpendicular guides and polar wraparound.
 - [x] Add seeded projection invariants and spatial-index lifecycle/boundary tests.
 - [x] Cover zero-length segments and full-circle arc sweeps.
+- [x] Verify positive and out-of-tolerance behavior for every supported snap type.
 - [x] Add shared reference geometry for columns, beams, walls, grids and polylines.
 - [x] Add deterministic snap tie-breaking and equal-priority snap hysteresis.
 - [x] Complete tracking-reference and spatial-index boundary/update tests.
