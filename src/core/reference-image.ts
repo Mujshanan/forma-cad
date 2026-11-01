@@ -28,9 +28,6 @@ export function referenceImageCorners(reference: ReferenceImage): Vec2[] {
 }
 
 export function referenceImageSvgTransform(reference: ReferenceImage): string {
-  const x = reference.anchor === "center" ? -reference.widthMm / 2 : 0;
-  const height = referenceImageHeight(reference);
-  const y = reference.anchor === "center" ? -height / 2 : 0;
   return `translate(${reference.position.x} ${-reference.position.y}) rotate(${-reference.rotation})`;
 }
 
