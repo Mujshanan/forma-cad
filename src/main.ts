@@ -437,14 +437,15 @@ referenceContent.addEventListener("click",event=>{
   if(target.id==="apply-calibration"){
     const reference=model.references.find(item=>item.id===selectedReferenceId);
     const actualDistance=Number(referenceContent.querySelector<HTMLInputElement>("#calibration-distance")?.value);
-    if(reference&&calibrationPick?.firstPoint&&calibrationPick.secondPoint){
+    const activeCalibration=calibrationPick;
+    if(reference&&activeCalibration?.firstPoint&&activeCalibration.secondPoint){
       try {
-        const calibrated=calibrateReferenceImage(reference,calibrationPick.firstPoint,calibrationPick.secondPoint,actualDistance);
+        const calibrated=calibrateReferenceImage(reference,activeCalibration.firstPoint,activeCalibration.secondPoint,actualDistance);
         pushUndo();
         Object.assign(reference,calibrated);
         calibrationPick=null;render();updateHistoryButtons();fitDrawing();
       } catch(error) {
-        calibrationPick.error=error instanceof Error?error.message:"Invalid calibration";
+        activeCalibration.error=error instanceof Error?error.message:"Invalid calibration";
         render();
       }
     }
