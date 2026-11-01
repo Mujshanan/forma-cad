@@ -408,9 +408,14 @@ referenceContent.addEventListener("change",event=>{
   if(target.id==="reference-locked")reference.locked=(target as HTMLInputElement).checked;
   render();updateHistoryButtons();
 });
+referenceContent.addEventListener("pointerdown",event=>{if((event.target as HTMLElement).id==="reference-opacity")pushUndo();});
 referenceContent.addEventListener("input",event=>{
   const target=event.target as HTMLInputElement;
-  if(target.id==="reference-opacity"){const output=referenceContent.querySelector<HTMLOutputElement>("#reference-opacity-value");if(output)output.value=target.value+"%";}
+  if(target.id==="reference-opacity"){
+    const reference=model.references.find(item=>item.id===selectedReferenceId);
+    if(reference){reference.opacity=Math.max(0,Math.min(1,Number(target.value)/100));referenceLayer.querySelector<SVGGElement>(`[data-reference-id="${reference.id}"]`)?.setAttribute("opacity",String(reference.opacity));}
+    const output=referenceContent.querySelector<HTMLOutputElement>("#reference-opacity-value");if(output)output.value=target.value+"%";
+  }
 });
 const resizeObserver=new ResizeObserver(()=>render());resizeObserver.observe(svg);
 rebuildLayers();render();
