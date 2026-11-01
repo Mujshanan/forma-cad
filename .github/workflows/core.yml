@@ -4,6 +4,7 @@ on:
     branches: ["**"]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 jobs:
   core:
     runs-on: ubuntu-latest
@@ -18,3 +19,11 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+      - name: Upload production web build
+        if: github.ref == 'refs/heads/main' && success()
+        uses: actions/upload-artifact@v6
+        with:
+          name: forma-cad-web-preview
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
