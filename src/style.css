@@ -443,3 +443,19 @@ button:focus-visible, a:focus-visible {
 .calibration-actions #cancel-calibration, #cancel-calibration { background: #394452; color: #c5d0de; }
 .calibration-error { color: #ffaaaa !important; }
 .calibration-saved { margin: 8px 2px; color: #8fd6ae; font-size: 9px; }
+
+.reference-snap-guide {
+  stroke: #65d5c1;
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  opacity: .95;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px #32b99c66);
+}
+.reference-analyze {
+  width: 100%; margin-top: 6px; padding: 8px; border-radius: 5px;
+  background: #285447; color: #b9f1df; font-size: 10px;
+}
+.reference-analyze:disabled { opacity: .45; cursor: not-allowed; }
+.reference-analysis-status { margin: 7px 2px; color: #8fb6aa; font-size: 9px; line-height: 1.45; }
