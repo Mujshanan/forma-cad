@@ -3,7 +3,7 @@ import type { Vec2 } from "./core/geometry";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
 import "./style.css";
 
-type Tool = "select" | "line";
+type Tool = "select" | "line" | "circle" | "column";
 const svg = document.querySelector<SVGSVGElement>("#drawing-canvas")!;
 const worldLayer = document.querySelector<SVGGElement>("#world-layer")!;
 const overlayLayer = document.querySelector<SVGGElement>("#overlay-layer")!;
@@ -120,12 +120,20 @@ function render() {
   overlayLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
   worldLayer.innerHTML = model.entities.map(entitySvg).join("");
   overlayLayer.innerHTML = "";
-  if (firstPoint && tool === "line") {
+  if (firstPoint && tool !== "select") {
     const end = snapPoint(pointerWorld);
-    const dx = end.x-firstPoint.x, dy = end.y-firstPoint.y;
-    const length = Math.hypot(dx,dy), angle = (Math.atan2(dy,dx)*180/Math.PI+360)%360;
-    overlayLayer.innerHTML = `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${end.x}" y2="${-end.y}"/><text class="dimension-label listening-dimension" x="${(firstPoint.x+end.x)/2}" y="${-(firstPoint.y+end.y)/2-150/view.scale}">L ${fmt(length)} mm · ${fmt(angle)}°</text>`;
-    hint.textContent = "Click to finish line · Esc to cancel";
+    if (tool === "line") {
+      const dx=end.x-firstPoint.x, dy=end.y-firstPoint.y, length=Math.hypot(dx,dy), angle=(Math.atan2(dy,dx)*180/Math.PI+360)%360;
+      overlayLayer.innerHTML = `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${end.x}" y2="${-end.y}"/><text class="dimension-label listening-dimension" x="${(firstPoint.x+end.x)/2}" y="${-(firstPoint.y+end.y)/2-150/view.scale}">L ${fmt(length)} mm · ${fmt(angle)}°</text>`;
+      hint.textContent = "Click to finish line · Esc to cancel";
+    } else if (tool === "column") {
+      const x=Math.min(firstPoint.x,end.x), y=Math.max(firstPoint.y,end.y), w=Math.abs(end.x-firstPoint.x), h=Math.abs(end.y-firstPoint.y);
+      overlayLayer.innerHTML = `<rect class="preview-geometry" x="${x}" y="${-y}" width="${w}" height="${h}" fill="#579cff" fill-opacity=".12"/>`;
+      hint.textContent = "Click opposite corner to finish column · Esc to cancel";
+    } else {
+      overlayLayer.innerHTML = `<circle class="preview-geometry" cx="${firstPoint.x}" cy="${-firstPoint.y}" r="${distance(firstPoint,end)}"/>`;
+      hint.textContent = "Click to set circle radius · Esc to cancel";
+    }
     hint.classList.remove("hidden");
   } else {
     hint.textContent = model.entities.length ? "" : "Choose Line, then click twice to draw";
@@ -157,7 +165,7 @@ function rebuildLayers() {
 function setTool(next: Tool) {
   tool = next; firstPoint = null;
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.classList.toggle("active",button.dataset.tool===next));
-  toolName.textContent = next === "select" ? "Select" : "Line";
+  toolName.textContent = ({ select: "Select", line: "Line", circle: "Circle", column: "Column" } as const)[next];
   svg.style.cursor = next === "select" ? "default" : "crosshair";
   render();
 }
@@ -171,6 +179,8 @@ function nearestSelection(point: Vec2) {
       d=distance(point,{x:a.x+t*dx,y:a.y+t*dy});
     } else if (entity.type === "column") {
       d=Math.hypot(Math.max(0,Math.abs(point.x-entity.center.x)-entity.width/2),Math.max(0,Math.abs(point.y-entity.center.y)-entity.height/2));
+    } else if (entity.type === "circle") {
+      d=Math.max(0, distance(point,entity.center)-entity.radius);
     }
     if (d < bestDistance) { bestDistance=d; best=entity; }
   }
@@ -184,6 +194,7 @@ function fitDrawing() {
   for (const entity of model.entities) {
     if ("start" in entity && "end" in entity) points.push(entity.start,entity.end);
     else if (entity.type==="column") points.push({x:entity.center.x-entity.width/2,y:entity.center.y-entity.height/2},{x:entity.center.x+entity.width/2,y:entity.center.y+entity.height/2});
+    else if (entity.type==="circle") points.push({x:entity.center.x-entity.radius,y:entity.center.y-entity.radius},{x:entity.center.x+entity.radius,y:entity.center.y+entity.radius});
   }
   if (!points.length) return;
   const minX=Math.min(...points.map(p=>p.x)), maxX=Math.max(...points.map(p=>p.x)), minY=Math.min(...points.map(p=>p.y)), maxY=Math.max(...points.map(p=>p.y));
@@ -192,11 +203,12 @@ function fitDrawing() {
   view.origin={x:rect.width/2-(minX+maxX)/2*view.scale,y:rect.height/2+(minY+maxY)/2*view.scale};
   render();
 }
-function commitLine(end: Vec2) {
+function commitShape(end: Vec2) {
   if (!firstPoint || distance(firstPoint,end) < 0.01) return;
   pushUndo();
-  const start={...firstPoint};
-  model.entities.push({id:"L"+nextId++,type:"line",layer:"S-ANNO",start,end:{...end}});
+  if (tool === "line") model.entities.push({id:"L"+nextId++,type:"line",layer:"S-ANNO",start:{...firstPoint},end:{...end}});
+  else if (tool === "column") model.entities.push({id:"COL"+nextId++,type:"column",layer:"S-COLS",center:{x:(firstPoint.x+end.x)/2,y:(firstPoint.y+end.y)/2},width:Math.abs(end.x-firstPoint.x),height:Math.abs(end.y-firstPoint.y)});
+  else if (tool === "circle") model.entities.push({id:"C"+nextId++,type:"circle",layer:"S-ANNO",center:{...firstPoint},radius:distance(firstPoint,end)});
   firstPoint=null; selectedId=model.entities[model.entities.length-1].id; render(); updateHistoryButtons();
 }
 function deleteSelection() {
@@ -223,7 +235,7 @@ svg.addEventListener("pointerdown", event => {
   const raw=toWorld(event); pointerWorld=raw;
   if (tool==="select") { nearestSelection(raw); return; }
   if (!firstPoint) { firstPoint={...raw}; render(); return; }
-  commitLine(snapPoint(raw));
+  commitShape(snapPoint(raw));
 });
 svg.addEventListener("pointermove", event => {
   if (dragEndpoint) {
@@ -252,6 +264,8 @@ window.addEventListener("keydown",event=>{
   }
   if(event.key.toLowerCase()==="v") setTool("select");
   if(event.key.toLowerCase()==="l") setTool("line");
+  if(event.key.toLowerCase()==="c") setTool("circle");
+  if(event.key.toLowerCase()==="r") setTool("column");
   if(event.key==="F3"){
     snapEnabled=!snapEnabled;document.querySelector("#toggle-snap")?.classList.toggle("off",!snapEnabled);render();
   }
