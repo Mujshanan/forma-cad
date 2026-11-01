@@ -92,7 +92,6 @@ function render() {
     overlayLayer.innerHTML += `<circle class="snap-point${isSnapped ? " is-snapped" : ""}" cx="${p.x}" cy="${-p.y}" r="${6/view.scale}"/>`;
     if (firstPoint) {
       const dimensions = calculateTemporaryDimensions(firstPoint, p);
-      const mid = {x:(p.x+firstPoint.x)/2,y:(p.y+firstPoint.y)/2};
       const lengthMarker = draftFields.activeField === "length" && !draftFields.isEmpty ? "▶ " : "";
       const angleMarker = draftFields.activeField === "angle" && !draftFields.isEmpty ? "▶ " : "";
       const label = `${lengthMarker}L ${draftFields.lengthText || fmt(dimensions.length)} mm · ${angleMarker}∠ ${draftFields.angleText || fmt(dimensions.angleDeg)}°`;
