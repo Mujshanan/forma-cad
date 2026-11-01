@@ -57,7 +57,8 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
     const p=projectPointOnLine(context.lastPoint,item.s);
     if(distance(p,cursorWorld)<=tolerance) addSnap(snaps,"perpendicular",p,item.id,cursorWorld,pxScale);
   }
-  const sorted=[...snaps.values()].filter(s=>s.distancePx<=10).sort((a,b)=>
+  const allCandidates=[...snaps.values()];
+  const sorted=allCandidates.filter(s=>s.distancePx<=10).sort((a,b)=>
     PRIORITY[b.type]-PRIORITY[a.type] ||
     a.distancePx-b.distancePx ||
     a.point.x-b.point.x ||
@@ -70,16 +71,19 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
   // Explicit Tab cycling always wins over hysteresis.
   if ((context.candidateIndex ?? 0) === 0 && context.previousSnap && selected) {
     const margin = Math.max(0, context.hysteresisPx ?? 2);
-    const previous = sorted.find(s =>
+    const previous = allCandidates.find(s =>
       s.type === context.previousSnap!.type &&
       distance(s.point, context.previousSnap!.point) <= 1e-5 &&
       s.entityIds.some(id => context.previousSnap!.entityIds.includes(id))
     );
-    if (previous &&
+    if (previous && previous.distancePx <= 10 + margin) {
+      if (!sorted.some(s => s.type === previous.type && s.point.x === previous.point.x && s.point.y === previous.point.y)) sorted.push(previous);
+      if (!selected || (
         !(previous.point.x === selected.point.x && previous.point.y === selected.point.y && previous.entityIds.join(",") === selected.entityIds.join(",")) &&
         PRIORITY[previous.type] === PRIORITY[selected.type] &&
-        previous.distancePx <= 10 + margin &&
-        previous.distancePx <= selected.distancePx + margin) selected = previous;
+        previous.distancePx <= selected.distancePx + margin
+      )) selected = previous;
+    }
   }
   let point=selected?.point ?? {...cursorWorld};
   const guides:Guide[]=[];
