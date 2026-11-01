@@ -54,7 +54,7 @@ test("select and delete operate on a committed line", async ({ page }) => {
   const middle = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   await page.mouse.click(middle.x, middle.y);
   await expect(page.locator("#world-layer line.entity.selected")).toHaveCount(1);
-  await page.getByRole("button", { name: /Delete selected/ }).click();
+  await page.locator("#delete-selection").click();
   await expect(page.locator("#world-layer line.entity")).toHaveCount(0);
   await expect(page.locator("#entity-count")).toHaveText("0 objects");
 });
