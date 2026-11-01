@@ -47,7 +47,8 @@ The geometry and inference core must remain independent of the browser DOM and r
 - `src/core/geometry.ts`: vector math, projection, distances, bounds and intersections (millimetres, Y-up).
 - `src/core/model.ts`: typed document entities and structural layers.
 - `src/core/spatial.ts`: uniform-grid spatial hash for nearby entity lookup.
-- `src/core/inference.ts`: snap candidates, tolerance handling and tracking-guide calculation.
+- `src/core/references.ts`: reusable world-space reference points and segments for structural entities.
+- `src/core/inference.ts`: snap candidates, deterministic ranking, snap hysteresis, tolerance handling and tracking-guide calculation.
 - `src/core/view.ts`: pure world/screen transforms and cursor-anchored zoom.
 - `src/tools/` (planned): isolated stateful drawing tools.
 - `src/interaction/` (planned): pointer/keyboard input, tracking state and tool lifecycle.
@@ -283,6 +284,9 @@ A feature is done only when:
 - [x] Vitest and TypeScript CI workflow configured.
 - [x] Run and verify the committed Vitest suite in GitHub Actions.
 - [ ] Complete inference edge-case and stability tests.
+- [x] Add shared reference geometry for columns, beams, walls, grids and polylines.
+- [x] Add deterministic snap tie-breaking and equal-priority snap hysteresis.
+- [ ] Complete tracking-reference and spatial-index boundary/update tests.
 - [x] Initial SVG canvas shell, world/screen transforms, pan/zoom and view-transform unit tests.
 - [x] Initial select, line, grid, column, beam and wall drawing interactions.
 - [x] Initial snap markers, alignment-guide overlay and live length/angle preview labels.

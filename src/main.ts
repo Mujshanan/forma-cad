@@ -1,4 +1,4 @@
-import { infer, type InferenceResult } from "./core/inference";
+import { infer, type InferenceResult, type Snap } from "./core/inference";
 import { createDocument, type Entity, type DocumentModel } from "./core/model";
 import type { Vec2 } from "./core/geometry";
 import { SpatialIndex } from "./core/spatial";
@@ -27,6 +27,7 @@ let preview: InferenceResult | null = null;
 let selectedId: string | null = null;
 let snapEnabled = true;
 let candidateIndex = 0;
+let previousSnap: Snap | undefined;
 let spaceDown = false;
 let panning = false;
 let panStart: Vec2 | null = null;
@@ -110,18 +111,25 @@ function renderLayers() {
   layerList.innerHTML = model.layers.map(layer=>`<div class="layer-row"><span class="layer-swatch" style="background:${layer.color}"></span><span>${escapeHtml(layer.name)}</span><em>●</em></div>`).join("");
 }
 function setTool(next: Tool) {
-  tool = next; firstPoint = null; preview = null; candidateIndex = 0; selectedId = null;
+  tool = next; firstPoint = null; preview = null; candidateIndex = 0; previousSnap = undefined; selectedId = null;
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.classList.toggle("active",button.dataset.tool===next));
   toolName.textContent = next.charAt(0).toUpperCase()+next.slice(1);
   svg.style.cursor = next === "select" ? "default" : "crosshair";
   render();
 }
 function inferAt(point: Vec2) {
-  if (!snapEnabled) return {point,snaps:[],guides:[]};
-  return infer(point,{lastPoint:firstPoint ?? undefined,shift:shiftDown,candidateIndex},index,view.scale);
+  if (!snapEnabled) { previousSnap = undefined; return {point,snaps:[],guides:[]}; }
+  const result = infer(point,{
+    lastPoint:firstPoint ?? undefined,
+    shift:shiftDown,
+    candidateIndex,
+    previousSnap,
+  },index,view.scale);
+  previousSnap = result.snaps.find(s => s.point.x === result.point.x && s.point.y === result.point.y);
+  return result;
 }
 function addEntity(entity: Entity) {
-  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; render();
+  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; previousSnap = undefined; candidateIndex = 0; render();
 }
 function commitAt(point: Vec2) {
   if (tool === "column") {
