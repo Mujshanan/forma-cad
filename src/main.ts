@@ -170,9 +170,8 @@ svg.addEventListener("pointerdown", event => {
   if (event.button!==0) return;
   const raw=toWorld(event); pointerWorld=raw;
   if (tool==="select") { nearestSelection(raw); return; }
-  const point=snapPoint(raw);
-  if (!firstPoint) { firstPoint={...point}; render(); return; }
-  commitLine(point);
+  if (!firstPoint) { firstPoint={...raw}; render(); return; }
+  commitLine(snapPoint(raw));
 });
 svg.addEventListener("pointermove", event => {
   if (panning && panStart && viewStart) {
