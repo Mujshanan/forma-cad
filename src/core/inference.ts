@@ -57,7 +57,13 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
     const p=projectPointOnLine(context.lastPoint,item.s);
     if(distance(p,cursorWorld)<=tolerance) addSnap(snaps,"perpendicular",p,item.id,cursorWorld,pxScale);
   }
-  const sorted=[...snaps.values()].filter(s=>s.distancePx<=10).sort((a,b)=>PRIORITY[b.type]-PRIORITY[a.type] || a.distancePx-b.distancePx);
+  const sorted=[...snaps.values()].filter(s=>s.distancePx<=10).sort((a,b)=>
+    PRIORITY[b.type]-PRIORITY[a.type] ||
+    a.distancePx-b.distancePx ||
+    a.point.x-b.point.x ||
+    a.point.y-b.point.y ||
+    a.entityIds.join(",").localeCompare(b.entityIds.join(","))
+  );
   const candidateIndex = Math.max(0, Math.min(context.candidateIndex ?? 0, Math.max(0, sorted.length - 1)));
   let selected = sorted[candidateIndex];
   // Retain the prior snap briefly when two candidates of equal priority compete.
