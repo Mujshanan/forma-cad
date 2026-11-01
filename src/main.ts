@@ -92,7 +92,7 @@ function render() {
     if (firstPoint) {
       const dimensions = calculateTemporaryDimensions(firstPoint, p);
       const mid = {x:(p.x+firstPoint.x)/2,y:(p.y+firstPoint.y)/2};
-      const label = draftFields.isEmpty ? `${fmt(dimensions.length)} mm · ${fmt(dimensions.angleDeg)}°` : draftFields.text;
+      const label = `${draftFields.lengthText || fmt(dimensions.length)} mm · ${draftFields.angleText || fmt(dimensions.angleDeg)}°`;
       overlayLayer.innerHTML += `<text class="dimension-label listening-dimension" x="${mid.x}" y="${-mid.y-28/view.scale}">${escapeHtml(label)}</text>`;
       const tag = tool === "column" ? "Column preview" : tool === "grid" ? "Grid preview" : tool === "beam" ? "Beam preview" : tool === "wall" ? "Wall preview" : "Line preview";
       if (tool === "column") overlayLayer.innerHTML += `<rect class="preview-geometry" x="${p.x-200}" y="${-p.y-200}" width="400" height="400"/>`;
@@ -148,7 +148,7 @@ function inferAt(point: Vec2) {
   }
   if (firstPoint && orthogonalEnabled && !shiftDown && draftFields.isEmpty) {
     const constrained = constrainOrthogonal(firstPoint, result.point);
-    const type = constrained.x === firstPoint.x ? "vertical" : "horizontal";
+    const type: "vertical" | "horizontal" = constrained.x === firstPoint.x ? "vertical" : "horizontal";
     result = { ...result, point: constrained, guides: [...result.guides, { type, start: firstPoint, end: constrained }] };
   }
   return result;
