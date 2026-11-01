@@ -35,7 +35,7 @@
         <main class="drawing-area">
           <div class="canvas-toolbar">
             <div class="tool-context"><span class="context-dot"></span><span id="active-tool-name">Select</span><span class="context-hint">ESC to cancel · Middle mouse or Space to pan</span></div>
-            <div class="canvas-actions"><button id="zoom-fit" class="quiet">Fit drawing</button><button id="toggle-ortho" class="toggle on">Ortho <kbd>F8</kbd></button><button id="toggle-snap" class="toggle on">Snap <kbd>F3</kbd></button></div>
+            <div class="canvas-actions"><button id="zoom-fit" class="quiet" title="Fit drawing (Home)">Fit drawing</button><button id="toggle-auto-fit" class="toggle off" title="Automatically fit view after each committed object">Auto Fit</button><button id="toggle-ortho" class="toggle on">Ortho <kbd>F8</kbd></button><button id="toggle-snap" class="toggle on">Snap <kbd>F3</kbd></button></div>
           </div>
           <div class="canvas-wrap">
             <svg id="drawing-canvas" role="img" aria-label="Structural drafting canvas">
