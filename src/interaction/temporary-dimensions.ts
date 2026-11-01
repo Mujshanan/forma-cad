@@ -87,5 +87,12 @@ export class TemporaryDimensionSession {
     if (this.isEmpty) return current;
     const input = parseDraftInput(this.text);
     return input ? applyDraftInput(start, current, input) : null;
+
+  /** Commits a valid preview value and resets the keyboard session. */
+  commit(start: Vec2, current: Vec2): Vec2 | null {
+    const point = this.resolve(start, current);
+    if (point !== null) this.clear();
+    return point;
+  }
   }
 }
