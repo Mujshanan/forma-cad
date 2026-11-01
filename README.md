@@ -49,7 +49,7 @@ The geometry and inference core must remain independent of the browser DOM and r
 - `src/core/spatial.ts`: uniform-grid spatial hash for nearby entity lookup.
 - `src/core/references.ts`: reusable world-space reference points and segments for structural entities.
 - `src/core/inference.ts`: snap candidates, deterministic ranking, snap hysteresis, tolerance handling and tracking-guide calculation.
-- `src/interaction/temporary-dimensions.ts`: independent live dimension calculations and typed length/angle/polar input parsing; consumes points from inference and does not mutate geometry or inference state.
+- `src/interaction/temporary-dimensions.ts`: independent live dimension calculations, typed length/angle/polar parsing and a keyboard drafting session; constrains transient preview points without mutating geometry or inference state.
 - `src/core/view.ts`: pure world/screen transforms and cursor-anchored zoom.
 - `src/tools/` (planned): isolated stateful drawing tools.
 - `src/interaction/` (planned): pointer/keyboard input, tracking state and tool lifecycle.
@@ -297,7 +297,8 @@ A feature is done only when:
 - [x] Basic JSON project save/open.
 - [x] Extract live temporary-dimension calculations from the canvas renderer into an independently tested interaction module.
 - [x] Add typed length, angle and polar-input parsing/application primitives without coupling them to inference.
-- [ ] Connect typed dimension input to the drawing-tool keyboard lifecycle and preview override.
+- [x] Connect typed length, angle and polar input to the drawing keyboard; preview updates while typing, Enter commits and Escape cancels.
+- [x] Test drafting-session input, invalid-value rejection, backspace recovery, cancellation/reset and shortcut-key precedence.
 - [ ] Add robust editing, undo/redo, layer controls and DXF export.
 - [ ] Add browser end-to-end tests and Windows desktop packaging.
 
