@@ -311,6 +311,10 @@ button:focus-visible, a:focus-visible {
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
 }
+.snap-point.is-snapped {
+  fill: #83c1ff;
+  stroke: #d9ecff;
+}
 .preview-geometry {
   fill: none;
   stroke: #83c1ff;
