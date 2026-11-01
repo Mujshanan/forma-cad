@@ -25,6 +25,8 @@
           <div class="rail-label">TOOLS</div>
           <button class="tool active" data-tool="select" title="Select (V)"><span>↖</span><small>Select</small></button>
           <button class="tool" data-tool="line" title="Line (L)"><span>／</span><small>Line</small></button>
+          <button class="tool" data-tool="column" title="Column (R)"><span>▱</span><small>Column</small></button>
+          <button class="tool" data-tool="circle" title="Circle (C)"><span>○</span><small>Circle</small></button>
           <div class="rail-divider"></div>
           <button id="delete-selection" class="tool" title="Delete selected"><span>⌫</span><small>Delete</small></button>
         </aside>
@@ -49,7 +51,7 @@
               <g id="world-layer"></g>
               <g id="overlay-layer"></g>
             </svg>
-            <div class="canvas-hint" id="canvas-hint">Choose Line, then click twice to draw</div>
+            <div class="canvas-hint" id="canvas-hint">Choose a drawing tool to begin</div>
             <div class="coordinate-readout"><span id="coordinate-readout">X 0.0 · Y 0.0 mm</span><span id="zoom-readout">8%</span></div>
           </div>
           <footer class="statusbar"><span><i class="status-dot"></i> Ready</span><span id="snap-readout">SNAP: ENDPOINTS</span><span>UNITS: mm</span><span>WORLD: Y-UP</span><span id="entity-count">0 objects</span></footer>
