@@ -92,7 +92,7 @@ function renderProperties() {
 }
 function render() {
   worldLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
-  overlayLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${-view.scale})`);
+  overlayLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
   worldLayer.innerHTML = model.entities.map(entitySvg).join("");
   overlayLayer.innerHTML = "";
   if (firstPoint && tool === "line") {
