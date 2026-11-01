@@ -399,3 +399,63 @@ button:focus-visible, a:focus-visible {
 }
 .endpoint-handle:active { cursor: grabbing; }
 .snap-point { pointer-events: none; }
+
+/* Reference image management */
+#reference-layer { pointer-events: none; }
+#reference-layer [data-reference-id] { pointer-events: all; }
+.reference-tools { display: flex; gap: 6px; align-items: center; padding: 9px 12px 5px; }
+.reference-tools select, .reference-editor select, .reference-editor input:not([type="checkbox"]):not([type="range"]) {
+  min-width: 0; width: 100%; padding: 7px 8px; border: 1px solid #384352; border-radius: 5px;
+  background: #171c24; color: #dfe7f1; font: inherit; font-size: 10px;
+}
+.reference-tools select { flex: 1; }
+.reference-tools button { white-space: nowrap; background: #29496e; color: #c1dcff; }
+.reference-content { padding: 5px 12px 14px; }
+.reference-empty, .reference-hint { padding: 8px 3px; color: #8795a7; font-size: 10px; line-height: 1.5; }
+.reference-row { display: flex; align-items: center; gap: 7px; padding: 7px 5px; border-radius: 5px; color: #bdc8d6; font-size: 10px; cursor: pointer; }
+.reference-row:hover, .reference-row.active { background: #2b3a4c; }
+.reference-status { color: #8ebdff; }
+.reference-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reference-small-action { padding: 4px 6px; border-radius: 4px; background: #303a48; color: #c0ccda; font-size: 9px; }
+.reference-editor { margin-top: 8px; padding: 10px; border: 1px solid #384352; border-radius: 6px; background: #1a2029; }
+.reference-editor-title { margin-bottom: 10px; color: #8e9daf; font-size: 8px; font-weight: 800; letter-spacing: .7px; overflow-wrap: anywhere; }
+.reference-editor label { display: block; margin: 8px 0; color: #9eacbd; font-size: 9px; }
+.reference-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.reference-opacity-label output { float: right; color: #dce8f7; }
+.reference-editor input[type="range"] { width: 100%; accent-color: #579cff; margin-top: 8px; }
+.reference-toggle-row { display: flex; justify-content: space-between; gap: 8px; }
+.reference-toggle-row label { display: flex; align-items: center; gap: 5px; }
+.reference-toggle-row input { accent-color: #579cff; }
+.reference-remove { width: 100%; margin-top: 8px; padding: 7px; border-radius: 5px; background: #4a2c31; color: #ffc6c6; font-size: 10px; }
+.reference-hint { margin: 7px 0 0; padding: 0; }
+.references-heading { margin-top: 2px; border-top: 1px solid var(--line); }
+
+/* Two-point reference calibration */
+.reference-calibrate { width: 100%; margin-top: 8px; padding: 8px; border-radius: 5px; background: #29496e; color: #c1dcff; font-size: 10px; }
+.calibration-editor { margin-top: 9px; padding: 10px; border: 1px solid #4b6380; border-radius: 6px; background: #1b2a3b; }
+.calibration-title { color: #a9cfff; font-size: 9px; font-weight: 800; letter-spacing: .7px; }
+.calibration-editor p { color: #b4c1d1; font-size: 10px; line-height: 1.5; }
+.calibration-editor strong { color: #fff; }
+.calibration-editor label { display: block; color: #b4c1d1; font-size: 9px; }
+.calibration-editor input { display: block; width: 100%; margin-top: 6px; padding: 8px; border: 1px solid #45576c; border-radius: 5px; background: #111923; color: #fff; }
+.calibration-actions { display: flex; gap: 6px; margin-top: 9px; }
+.calibration-actions button, #cancel-calibration { padding: 7px 9px; border-radius: 5px; background: #355d87; color: #e2efff; font-size: 10px; }
+.calibration-actions #cancel-calibration, #cancel-calibration { background: #394452; color: #c5d0de; }
+.calibration-error { color: #ffaaaa !important; }
+.calibration-saved { margin: 8px 2px; color: #8fd6ae; font-size: 9px; }
+
+.reference-snap-guide {
+  stroke: #65d5c1;
+  stroke-width: 1.2;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  opacity: .95;
+  pointer-events: none;
+  filter: drop-shadow(0 0 2px #32b99c66);
+}
+.reference-analyze {
+  width: 100%; margin-top: 6px; padding: 8px; border-radius: 5px;
+  background: #285447; color: #b9f1df; font-size: 10px;
+}
+.reference-analyze:disabled { opacity: .45; cursor: not-allowed; }
+.reference-analysis-status { margin: 7px 2px; color: #8fb6aa; font-size: 9px; line-height: 1.45; }
