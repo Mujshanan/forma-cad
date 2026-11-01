@@ -3,6 +3,7 @@ import { createDocument, type Entity, type DocumentModel } from "./core/model";
 import type { Vec2 } from "./core/geometry";
 import { SpatialIndex } from "./core/spatial";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
+import { calculateTemporaryDimensions } from "./interaction/temporary-dimensions";
 import "./style.css";
 
 type Tool = "select" | "line" | "grid" | "column" | "beam" | "wall";
@@ -78,9 +79,9 @@ function render() {
     const p = preview.point;
     overlayLayer.innerHTML += `<circle class="snap-point" cx="${p.x}" cy="${-p.y}" r="${6/view.scale}"/>`;
     if (firstPoint) {
-      const d = Math.hypot(p.x-firstPoint.x,p.y-firstPoint.y);
+      const dimensions = calculateTemporaryDimensions(firstPoint, p);
       const mid = {x:(p.x+firstPoint.x)/2,y:(p.y+firstPoint.y)/2};
-      overlayLayer.innerHTML += `<text class="dimension-label" x="${mid.x}" y="${-mid.y-90/view.scale}">${fmt(d)} mm · ${fmt(Math.atan2(p.y-firstPoint.y,p.x-firstPoint.x)*180/Math.PI)}°</text>`;
+      overlayLayer.innerHTML += `<text class="dimension-label" x="${mid.x}" y="${-mid.y-90/view.scale}">${fmt(dimensions.length)} mm · ${fmt(dimensions.angleDeg)}°</text>`;
       const tag = tool === "column" ? "Column preview" : tool === "grid" ? "Grid preview" : tool === "beam" ? "Beam preview" : tool === "wall" ? "Wall preview" : "Line preview";
       if (tool === "column") overlayLayer.innerHTML += `<rect class="preview-geometry" x="${p.x-200}" y="${-p.y-200}" width="400" height="400"/>`;
       else overlayLayer.innerHTML += `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${p.x}" y2="${-p.y}"/>`;
