@@ -83,7 +83,7 @@ describe("temporary dimension keyboard session", () => {
 
   it("backspace repairs an invalid draft and clear cancels the input", () => {
     const session = new TemporaryDimensionSession();
-    for (const key of "12x") session.append(key);
+    for (const key of "12<") session.append(key);
     expect(session.isValid).toBe(false);
     session.backspace();
     expect(session.resolve({ x: 0, y: 0 }, { x: 5, y: 0 })).toEqual({ x: 12, y: 0 });
@@ -96,6 +96,7 @@ describe("temporary dimension keyboard session", () => {
     const session = new TemporaryDimensionSession();
     expect(session.append("v")).toBe(false);
     expect(session.append("l")).toBe(false);
+    expect(session.append("g")).toBe(false);
     expect(session.isEmpty).toBe(true);
   });
 });
