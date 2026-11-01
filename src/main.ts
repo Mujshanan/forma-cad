@@ -125,7 +125,7 @@ function inferAt(point: Vec2) {
     candidateIndex,
     previousSnap,
   },index,view.scale);
-  previousSnap = result.snaps[Math.min(candidateIndex, Math.max(0, result.snaps.length - 1))];
+  previousSnap = result.snaps.find(s => s.point.x === result.point.x && s.point.y === result.point.y);
   return result;
 }
 function addEntity(entity: Entity) {
