@@ -101,6 +101,7 @@ describe("temporary dimension keyboard session", () => {
   });
 });
 
+describe("temporary dimension commit and cancellation", () => {
   it("commits the exact preview point and resets the input session", () => {
     const session = new TemporaryDimensionSession();
     for (const key of "300") session.append(key);
@@ -124,3 +125,4 @@ describe("temporary dimension keyboard session", () => {
     expect(session.isEmpty).toBe(true);
     expect(session.resolve({ x: 0, y: 0 }, { x: 20, y: 0 })).toEqual({ x: 20, y: 0 });
   });
+});
