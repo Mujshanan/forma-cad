@@ -69,7 +69,7 @@ export function infer(cursorWorld: Vec2, context: InferenceContext, docIndex: Sp
   let selected = sorted[candidateIndex];
   // Retain the prior snap briefly when two candidates of equal priority compete.
   // Explicit Tab cycling always wins over hysteresis.
-  if ((context.candidateIndex ?? 0) === 0 && context.previousSnap && selected) {
+  if ((context.candidateIndex ?? 0) === 0 && context.previousSnap) {
     const margin = Math.max(0, context.hysteresisPx ?? 2);
     const previous = allCandidates.find(s =>
       s.type === context.previousSnap!.type &&
