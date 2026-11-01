@@ -14,6 +14,15 @@ test("reference image placement, scale, opacity, visibility and lock controls wo
   await expect(image).toHaveAttribute("width", "10000");
   await expect(page.locator("#reference-anchor")).toHaveValue("center");
 
+  const imageBox = await image.boundingBox();
+  if (!imageBox) throw new Error("Reference image is not visible");
+  const initialPosition = await page.locator("#reference-layer g").first().getAttribute("transform");
+  await page.mouse.move(imageBox.x + imageBox.width / 2, imageBox.y + imageBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(imageBox.x + imageBox.width / 2 + 80, imageBox.y + imageBox.height / 2 + 40);
+  await page.mouse.up();
+  await expect(page.locator("#reference-layer g").first()).not.toHaveAttribute("transform", initialPosition!);
+
   await page.locator("#reference-width").fill("12000");
   await page.locator("#reference-width").dispatchEvent("change");
   await expect(image).toHaveAttribute("width", "12000");
