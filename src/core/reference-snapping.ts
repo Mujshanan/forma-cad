@@ -50,7 +50,6 @@ export function snapToReferenceGeometry(
     anchors.push(segment.start, segment.end, middle);
   }
   for (let i = 0; i < segments.length; i++) for (let j = i + 1; j < segments.length; j++) {
-    if (segments[i].id === segments[j].id) continue;
     const intersection = segmentIntersection(segments[i].segment, segments[j].segment);
     if (intersection) {
       addCandidate(intersection, "intersection", 2);
