@@ -122,7 +122,12 @@ function renderProperties() {
   properties.innerHTML = `<div class="property-label">OBJECT</div><div class="property-value">${escapeHtml(entity.id)} · ${escapeHtml(entity.layer)}</div>` + values.map(([label,value])=>`<div class="property-label">${label.toUpperCase()}</div><div class="property-value">${escapeHtml(value)}</div>`).join("");
 }
 function render() {
-  referenceLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);\n  referenceLayer.innerHTML = model.references.filter(reference => reference.visible).map(reference => {\n    const offset = referenceImageLocalOffset(reference);\n    return `<g data-reference-id="${reference.id}" transform="${referenceImageSvgTransform(reference)}" opacity="${reference.opacity}"><image href="${reference.dataUrl}" x="${offset.x}" y="${offset.y}" width="${reference.widthMm}" height="${referenceImageHeight(reference)}" preserveAspectRatio="none" pointer-events="${reference.locked ? "none" : "all"}"/></g>`;\n  }).join("");\n  worldLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
+  referenceLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
+  referenceLayer.innerHTML = model.references.filter(reference => reference.visible).map(reference => {
+    const offset = referenceImageLocalOffset(reference);
+    return `<g data-reference-id="${reference.id}" transform="${referenceImageSvgTransform(reference)}" opacity="${reference.opacity}"><image href="${reference.dataUrl}" x="${offset.x}" y="${offset.y}" width="${reference.widthMm}" height="${referenceImageHeight(reference)}" preserveAspectRatio="none" pointer-events="${reference.locked ? "none" : "all"}"/></g>`;
+  }).join("");
+  worldLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
   overlayLayer.setAttribute("transform", `translate(${view.origin.x} ${view.origin.y}) scale(${view.scale} ${view.scale})`);
   worldLayer.innerHTML = model.entities.map(entitySvg).join("");
   overlayLayer.innerHTML = "";
@@ -164,6 +169,7 @@ function render() {
   snapReadout.textContent = snapEnabled ? "SNAP: ENDPOINTS" : "SNAP: OFF";
   entityCount.textContent = model.entities.length + (model.entities.length === 1 ? " object" : " objects");
   renderProperties();
+  renderReferencePanel();
 }
 function renderReferencePanel() {
   if (!model.references.length) {
@@ -231,6 +237,7 @@ function fitDrawing() {
   const rect=svg.getBoundingClientRect();
   if (!model.entities.length && !model.references.some(reference => reference.visible)) { view={origin:{x:rect.width/2,y:rect.height/2},scale:0.08}; render(); return; }
   const points: Vec2[]=[];
+  for (const reference of model.references) if (reference.visible) points.push(...referenceImageCorners(reference));
   for (const entity of model.entities) {
     if ("start" in entity && "end" in entity) points.push(entity.start,entity.end);
     else if (entity.type==="column") points.push({x:entity.center.x-entity.width/2,y:entity.center.y-entity.height/2},{x:entity.center.x+entity.width/2,y:entity.center.y+entity.height/2});
@@ -354,9 +361,11 @@ document.querySelector("#open-project")?.addEventListener("click",()=>fileInput.
 fileInput.addEventListener("change",async()=>{
   const file=fileInput.files?.[0];if(!file)return;
   try {
-    const parsed=JSON.parse(await file.text()) as {units?:string;entities?:Entity[];layers?:DocumentModel["layers"]};
+    const parsed=JSON.parse(await file.text()) as {units?:string;entities?:Entity[];layers?:DocumentModel["layers"];references?:ReferenceImage[]};
     if(parsed.units!=="mm"||!Array.isArray(parsed.entities)||!Array.isArray(parsed.layers))throw new Error("Unsupported project file");
-    pushUndo(); model.entities.splice(0,model.entities.length,...parsed.entities);model.layers.splice(0,model.layers.length,...parsed.layers);
+    const references=parsed.references??[];
+    if(!Array.isArray(references)||references.some(reference=>!reference||typeof reference.id!=="string"||typeof reference.dataUrl!=="string"||!reference.dataUrl.startsWith("data:image/")||!Number.isFinite(reference.widthMm)||reference.widthMm<=0||!Number.isFinite(reference.pixelWidth)||reference.pixelWidth<=0||!Number.isFinite(reference.pixelHeight)||reference.pixelHeight<=0))throw new Error("Invalid reference image data");
+    pushUndo(); model.entities.splice(0,model.entities.length,...parsed.entities);model.layers.splice(0,model.layers.length,...parsed.layers);model.references.splice(0,model.references.length,...references);
     nextId=model.entities.length+1;selectedId=null;selectedReferenceId=null;rebuildLayers();render();updateHistoryButtons();fitDrawing();updateHistoryButtons();
   } catch(error) { alert("Could not open project: "+(error instanceof Error?error.message:"Invalid JSON")); }
   fileInput.value="";
