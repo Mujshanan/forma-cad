@@ -68,7 +68,7 @@ export class TemporaryDimensionSession {
   get isValid(): boolean { return this.isEmpty || parseDraftInput(this.text) !== null; }
 
   append(character: string): boolean {
-    if (!/^[0-9.+\\-@<°]$/.test(character) && !["d", "e", "g"].includes(character.toLowerCase())) return false;
+    if (!/^[0-9.+@<°-]$/.test(character) && !["d", "e", "g"].includes(character.toLowerCase())) return false;
     this.text += character;
     return true;
   }
