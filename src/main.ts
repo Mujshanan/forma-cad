@@ -229,7 +229,7 @@ function nearestSelection(point: Vec2) {
 }
 function fitDrawing() {
   const rect=svg.getBoundingClientRect();
-  if (!model.entities.length) { view={origin:{x:rect.width/2,y:rect.height/2},scale:0.08}; render(); return; }
+  if (!model.entities.length && !model.references.some(reference => reference.visible)) { view={origin:{x:rect.width/2,y:rect.height/2},scale:0.08}; render(); return; }
   const points: Vec2[]=[];
   for (const entity of model.entities) {
     if ("start" in entity && "end" in entity) points.push(entity.start,entity.end);
@@ -341,7 +341,7 @@ document.querySelector("#toggle-grid")?.addEventListener("click",event=>{
   gridVisible=!gridVisible;(event.currentTarget as HTMLElement).classList.toggle("off",!gridVisible);render();
 });
 document.querySelector("#new-project")?.addEventListener("click",()=>{
-  if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;
+  if((model.entities.length||model.references.length)&&!confirm("Start a new project? Unsaved changes will be lost."))return;
   pushUndo(); model.entities.length=0;model.references.length=0;nextId=1;selectedId=null;selectedReferenceId=null;firstPoint=null;render();updateHistoryButtons();
 });
 document.querySelector("#zoom-fit")?.addEventListener("click",fitDrawing);
@@ -390,10 +390,10 @@ referenceContent.addEventListener("change",event=>{
   const reference=model.references.find(item=>item.id===selectedReferenceId);if(!reference)return;
   if(target.id==="reference-anchor"||target.id==="reference-x"||target.id==="reference-y"||target.id==="reference-width"||target.id==="reference-rotation"||target.id==="reference-opacity"||target.id==="reference-visible"||target.id==="reference-locked")pushUndo();
   if(target.id==="reference-anchor")reference.anchor=target.value as ReferenceImage["anchor"];
-  if(target.id==="reference-x")reference.position.x=Number(target.value);
-  if(target.id==="reference-y")reference.position.y=Number(target.value);
+  if(target.id==="reference-x"&&Number.isFinite(Number(target.value)))reference.position.x=Number(target.value);
+  if(target.id==="reference-y"&&Number.isFinite(Number(target.value)))reference.position.y=Number(target.value);
   if(target.id==="reference-width"&&Number(target.value)>0)reference.widthMm=Number(target.value);
-  if(target.id==="reference-rotation")reference.rotation=Number(target.value)||0;
+  if(target.id==="reference-rotation"&&Number.isFinite(Number(target.value)))reference.rotation=Number(target.value);
   if(target.id==="reference-opacity")reference.opacity=Math.max(0,Math.min(1,Number(target.value)/100));
   if(target.id==="reference-visible")reference.visible=(target as HTMLInputElement).checked;
   if(target.id==="reference-locked")reference.locked=(target as HTMLInputElement).checked;
