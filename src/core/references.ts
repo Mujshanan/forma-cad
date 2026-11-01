@@ -62,7 +62,8 @@ export function getReferenceGeometry(entity: Entity): EntityReferenceGeometry {
       return { points: [{ point: entity.center, role: "center" }], segments: [] };
     case "arc": {
       const tau = Math.PI * 2;
-      const sweep = ((entity.endAngle - entity.startAngle) % tau + tau) % tau;
+      const rawSweep = entity.endAngle - entity.startAngle;
+      const sweep = Math.abs(rawSweep) >= tau - 1e-9 ? tau : ((rawSweep % tau) + tau) % tau;
       const at = (angle: number): Vec2 => point(
         entity.center.x + Math.cos(angle) * entity.radius,
         entity.center.y + Math.sin(angle) * entity.radius,
