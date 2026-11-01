@@ -129,10 +129,24 @@ function renderLayers() {
 }
 function setTool(next: Tool) {
   tool = next; firstPoint = null; preview = null; draftFields.clear(); directionLock.clear(); alignmentTracker.clear(); candidateIndex = 0; previousSnap = undefined; selectedId = null;
-  document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.classList.toggle("active",button.dataset.tool===next));
+  window.addEventListener("blur",()=>{
+  spaceDown=false;
+  if(shiftDown){
+    shiftDown=false;
+    directionLock.clear();
+    if(firstPoint) preview=inferAt(pointerWorld);
+  }
+  svg.style.cursor=tool==="select"?"default":"crosshair";
+  render();
+});
+document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.classList.toggle("active",button.dataset.tool===next));
   toolName.textContent = next.charAt(0).toUpperCase()+next.slice(1);
   svg.style.cursor = next === "select" ? "default" : "crosshair";
   render();
+}
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || Boolean(target.closest("input, textarea, select, [contenteditable=\"true\"]"));
 }
 function inferAt(point: Vec2) {
   if (shiftDown && firstPoint && !directionLock.direction) directionLock.lock(firstPoint, point);
@@ -219,9 +233,16 @@ svg.addEventListener("wheel",event=>{
   render();
 },{passive:false});
 window.addEventListener("keydown",event=>{
-  if(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+  if(isEditableTarget(event.target)) return;
   if(event.code==="Space"){spaceDown=true;svg.style.cursor="grab";}
-  if(event.key==="Shift" && !shiftDown) { shiftDown=true; if(firstPoint) directionLock.lock(firstPoint,pointerWorld); }
+  if(event.key==="Shift" && !shiftDown) {
+    shiftDown=true;
+    if(firstPoint) {
+      directionLock.lock(firstPoint,pointerWorld);
+      preview=inferAt(pointerWorld);
+      render();
+    }
+  }
   if(event.key==="Tab" && firstPoint){event.preventDefault();draftFields.tab(event.shiftKey);render();return;}
   if(event.key==="Tab" && preview?.snaps.length){event.preventDefault();candidateIndex=(candidateIndex+1)%preview.snaps.length;preview=inferAt(pointerWorld);render();return;}
   if(event.key==="Escape"){if(firstPoint||!draftFields.isEmpty){firstPoint=null;preview=null;draftFields.clear();directionLock.clear();alignmentTracker.clear();previousSnap=undefined;render();}return;}
@@ -236,14 +257,47 @@ window.addEventListener("keydown",event=>{
     if(draftFields.append(event.key)){event.preventDefault();render();return;}
   }
   if(event.key==="Delete"||event.key==="Backspace"){if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}}
-  if(event.key==="F3"){snapEnabled=!snapEnabled;document.querySelector("#toggle-snap")?.classList.toggle("off",!snapEnabled);render();}
+  if(event.key==="F3"){
+    snapEnabled=!snapEnabled;
+    document.querySelector("#toggle-snap")?.classList.toggle("off",!snapEnabled);
+    snapReadout.textContent = snapEnabled ? "SNAP: ON" : "SNAP: OFF";
+    preview = tool !== "select" && (firstPoint !== null || snapEnabled) ? inferAt(pointerWorld) : null;
+    render();
+  }
   const keys:Record<string,Tool>={v:"select",l:"line",g:"grid",c:"column",b:"beam",w:"wall"};
   const next=keys[event.key.toLowerCase()];if(next)setTool(next);
 });
 window.addEventListener("keyup",event=>{if(event.code==="Space"){spaceDown=false;svg.style.cursor=tool==="select"?"default":"crosshair";}if(event.key==="Shift"){shiftDown=false;directionLock.clear();if(firstPoint)preview=inferAt(pointerWorld);render();}});
 document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.addEventListener("click",()=>setTool(button.dataset.tool as Tool)));
 document.querySelector("#delete-selection")?.addEventListener("click",()=>{if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}});
-document.querySelector("#toggle-snap")?.addEventListener("click",event=>{snapEnabled=!snapEnabled;(event.currentTarget as HTMLElement).classList.toggle("off",!snapEnabled);render();});
+document.querySelector("#toggle-snap")?.classList.toggle("off",!snapEnabled);
+    snapReadout.textContent = snapEnabled ? "SNAP: ON" : "SNAP: OFF";
+    preview = tool !== "select" && (firstPoint !== null || snapEnabled) ? inferAt(pointerWorld) : null;
+    render();
+  }
+  const keys:Record<string,Tool>={v:"select",l:"line",g:"grid",c:"column",b:"beam",w:"wall"};
+  const next=keys[event.key.toLowerCase()];if(next)setTool(next);
+});
+window.addEventListener("keyup",event=>{if(event.code==="Space"){spaceDown=false;svg.style.cursor=tool==="select"?"default":"crosshair";}if(event.key==="Shift"){shiftDown=false;directionLock.clear();if(firstPoint)preview=inferAt(pointerWorld);render();}});
+window.addEventListener("blur",()=>{
+  spaceDown=false;
+  if(shiftDown){
+    shiftDown=false;
+    directionLock.clear();
+    if(firstPoint) preview=inferAt(pointerWorld);
+  }
+  svg.style.cursor=tool==="select"?"default":"crosshair";
+  render();
+});
+document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.addEventListener("click",()=>setTool(button.dataset.tool as Tool)));
+document.querySelector("#delete-selection")?.addEventListener("click",()=>{if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}});
+document.querySelector("#toggle-snap")?.addEventListener("click",event=>{
+  snapEnabled=!snapEnabled;
+  (event.currentTarget as HTMLElement).classList.toggle("off",!snapEnabled);
+  snapReadout.textContent = snapEnabled ? "SNAP: ON" : "SNAP: OFF";
+  preview = tool !== "select" && (firstPoint !== null || snapEnabled) ? inferAt(pointerWorld) : null;
+  render();
+});
 document.querySelector("#new-project")?.addEventListener("click",()=>{if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;preview=null;draftFields.clear();alignmentTracker.clear();directionLock.clear();rebuildIndex();render();});
 document.querySelector("#zoom-fit")?.addEventListener("click",()=>{
   if(!model.entities.length){const rect=svg.getBoundingClientRect();view={origin:{x:rect.width/2,y:rect.height/2},scale:.08};}
