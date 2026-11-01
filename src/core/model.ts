@@ -24,6 +24,7 @@ export type ReferenceImage = {
   visible: boolean;
   locked: boolean;
   anchor: "origin" | "center";
+  calibration?: { actualDistanceMm: number; pointA: Vec2; pointB: Vec2 };
 };
 export type DocumentModel = { units: "mm"; entities: Entity[]; layers: Layer[]; references: ReferenceImage[] };
 export const DEFAULT_LAYERS: Layer[] = [
