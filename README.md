@@ -283,10 +283,12 @@ A feature is done only when:
 - [x] Initial snap candidate and guide inference.
 - [x] Vitest and TypeScript CI workflow configured.
 - [x] Run and verify the committed Vitest suite in GitHub Actions.
-- [ ] Complete inference edge-case and stability tests.
+- [x] Add guide-tracking tests for perpendicular snaps, extension, parallel/perpendicular guides and polar wraparound.
+- [x] Add seeded projection invariants and spatial-index lifecycle/boundary tests.
+- [x] Cover zero-length segments and full-circle arc sweeps.
 - [x] Add shared reference geometry for columns, beams, walls, grids and polylines.
 - [x] Add deterministic snap tie-breaking and equal-priority snap hysteresis.
-- [ ] Complete tracking-reference and spatial-index boundary/update tests.
+- [x] Complete tracking-reference and spatial-index boundary/update tests.
 - [x] Initial SVG canvas shell, world/screen transforms, pan/zoom and view-transform unit tests.
 - [x] Initial select, line, grid, column, beam and wall drawing interactions.
 - [x] Initial snap markers, alignment-guide overlay and live length/angle preview labels.
