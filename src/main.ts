@@ -3,7 +3,8 @@ import { createDocument, type Entity, type DocumentModel } from "./core/model";
 import type { Vec2 } from "./core/geometry";
 import { SpatialIndex } from "./core/spatial";
 import { screenToWorld, zoomAt, type ViewTransform } from "./core/view";
-import { calculateTemporaryDimensions, TemporaryDimensionSession } from "./interaction/temporary-dimensions";
+import { calculateTemporaryDimensions } from "./interaction/temporary-dimensions";
+import { DraftingInputFields } from "./interaction/drafting-input-fields";
 import "./style.css";
 
 type Tool = "select" | "line" | "grid" | "column" | "beam" | "wall";
@@ -25,7 +26,7 @@ let tool: Tool = "select";
 let firstPoint: Vec2 | null = null;
 let pointerWorld: Vec2 = { x: 0, y: 0 };
 let preview: InferenceResult | null = null;
-const draftSession = new TemporaryDimensionSession();
+const draftFields = new DraftingInputFields();
 let selectedId: string | null = null;
 let snapEnabled = true;
 let candidateIndex = 0;
@@ -75,10 +76,17 @@ function render() {
       overlayLayer.innerHTML = [[x-w,y-h],[x+w,y-h],[x+w,y+h],[x-w,y+h]].map(([px,py])=>`<circle class="selected-handle" cx="${px}" cy="${-py}" r="${5/view.scale}"/>`).join("");
     } else overlayLayer.innerHTML = "";
   } else overlayLayer.innerHTML = "";
+  const inputHud = document.querySelector<HTMLElement>("#drafting-inputs");
+  if (inputHud) {
+    inputHud.classList.toggle("hidden", !firstPoint);
+    inputHud.querySelector<HTMLElement>('[data-field="length"] .draft-value')!.textContent = draftFields.lengthText || "—";
+    inputHud.querySelector<HTMLElement>('[data-field="angle"] .draft-value')!.textContent = draftFields.angleText || "—";
+    inputHud.querySelectorAll<HTMLElement>("[data-field]").forEach(field => field.classList.toggle("active", field.dataset.field === draftFields.activeField));
+  }
   if (preview) {
     for (const guide of preview.guides) overlayLayer.innerHTML += `<line class="snap-guide" x1="${guide.start.x}" y1="${-guide.start.y}" x2="${guide.end.x}" y2="${-guide.end.y}"/>`;
     const basePoint = preview.point;
-    const resolvedDraft = firstPoint ? draftSession.resolve(firstPoint, basePoint) : basePoint;
+    const resolvedDraft = firstPoint ? draftFields.resolve(firstPoint, basePoint) : basePoint;
     const p = resolvedDraft ?? basePoint;
     overlayLayer.innerHTML += `<circle class="snap-point" cx="${p.x}" cy="${-p.y}" r="${6/view.scale}"/>`;
     if (firstPoint) {
@@ -88,7 +96,7 @@ function render() {
       const tag = tool === "column" ? "Column preview" : tool === "grid" ? "Grid preview" : tool === "beam" ? "Beam preview" : tool === "wall" ? "Wall preview" : "Line preview";
       if (tool === "column") overlayLayer.innerHTML += `<rect class="preview-geometry" x="${p.x-200}" y="${-p.y-200}" width="400" height="400"/>`;
       else overlayLayer.innerHTML += `<line class="preview-geometry" x1="${firstPoint.x}" y1="${-firstPoint.y}" x2="${p.x}" y2="${-p.y}"/>`;
-      hint.textContent = !draftSession.isValid ? "Invalid dimension · use 450, 30° or @450<30" : !draftSession.isEmpty ? tag + " · Enter to commit · Esc to cancel" : tag + " · type distance/angle or click endpoint";
+      hint.textContent = !draftFields.isValid ? "Invalid dimension · use 450, 30° or @450<30" : !draftFields.isEmpty ? tag + " · Enter to commit · Esc to cancel" : tag + " · type distance/angle or click endpoint";
     } else hint.textContent = "Click to place first point";
   } else {
     hint.textContent = model.entities.length ? "" : "Choose a tool and click to start drawing";
@@ -115,7 +123,7 @@ function renderLayers() {
   layerList.innerHTML = model.layers.map(layer=>`<div class="layer-row"><span class="layer-swatch" style="background:${layer.color}"></span><span>${escapeHtml(layer.name)}</span><em>●</em></div>`).join("");
 }
 function setTool(next: Tool) {
-  tool = next; firstPoint = null; preview = null; draftSession.clear(); candidateIndex = 0; previousSnap = undefined; selectedId = null;
+  tool = next; firstPoint = null; preview = null; draftFields.clear(); candidateIndex = 0; previousSnap = undefined; selectedId = null;
   document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.classList.toggle("active",button.dataset.tool===next));
   toolName.textContent = next.charAt(0).toUpperCase()+next.slice(1);
   svg.style.cursor = next === "select" ? "default" : "crosshair";
@@ -133,14 +141,14 @@ function inferAt(point: Vec2) {
   return result;
 }
 function addEntity(entity: Entity) {
-  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftSession.clear(); previousSnap = undefined; candidateIndex = 0; render();
+  model.entities.push(entity); rebuildIndex(); selectedId = entity.id; firstPoint = null; preview = null; draftFields.clear(); previousSnap = undefined; candidateIndex = 0; render();
 }
 function commitAt(point: Vec2) {
   if (tool === "column") {
     addEntity({id:"C"+nextId++,type:"column",layer:"S-COLS",center:point,width:400,height:400});
     return;
   }
-  if (!firstPoint) { firstPoint = point; draftSession.clear(); return; }
+  if (!firstPoint) { firstPoint = point; draftFields.clear(); return; }
   if (Math.hypot(point.x-firstPoint.x,point.y-firstPoint.y) < 0.01) return;
   const id = "E"+nextId++;
   if (tool === "grid") addEntity({id,type:"grid",layer:"S-GRID",start:firstPoint,end:point,label:"Grid "+id.slice(1)});
@@ -178,7 +186,7 @@ svg.addEventListener("pointerdown",event=>{
   pointerWorld = point;
   if(tool==="select") { nearestSelection(point); return; }
   const inferred=inferAt(point);
-  const endpoint = firstPoint ? draftSession.commit(firstPoint, inferred.point) : inferred.point;
+  const endpoint = firstPoint ? draftFields.commit(firstPoint, inferred.point) : inferred.point;
   if (endpoint === null) { render(); return; }
   commitAt(endpoint);
   if(firstPoint) preview=inferAt(pointerWorld);
@@ -202,17 +210,18 @@ window.addEventListener("keydown",event=>{
   if(event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
   if(event.code==="Space"){spaceDown=true;svg.style.cursor="grab";}
   if(event.key==="Shift") shiftDown=true;
+  if(event.key==="Tab" && firstPoint){event.preventDefault();draftFields.tab(event.shiftKey);render();return;}
   if(event.key==="Tab" && preview?.snaps.length){event.preventDefault();candidateIndex=(candidateIndex+1)%preview.snaps.length;preview=inferAt(pointerWorld);render();return;}
-  if(event.key==="Escape"){if(firstPoint||!draftSession.isEmpty){firstPoint=null;preview=null;draftSession.clear();previousSnap=undefined;render();}return;}
+  if(event.key==="Escape"){if(firstPoint||!draftFields.isEmpty){firstPoint=null;preview=null;draftFields.clear();previousSnap=undefined;render();}return;}
   if(event.key==="Enter" && firstPoint && preview){
     event.preventDefault();
-    const endpoint=draftSession.commit(firstPoint,preview.point);
+    const endpoint=draftFields.commit(firstPoint,preview.point);
     if(endpoint===null){render();return;}
     commitAt(endpoint);return;
   }
   if(firstPoint && tool!=="select"){
-    if(event.key==="Backspace"){event.preventDefault();draftSession.backspace();render();return;}
-    if(draftSession.append(event.key)){event.preventDefault();render();return;}
+    if(event.key==="Backspace"){event.preventDefault();draftFields.backspace();render();return;}
+    if(draftFields.append(event.key)){event.preventDefault();render();return;}
   }
   if(event.key==="Delete"||event.key==="Backspace"){if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}}
   if(event.key==="F3"){snapEnabled=!snapEnabled;document.querySelector("#toggle-snap")?.classList.toggle("off",!snapEnabled);render();}
@@ -223,7 +232,7 @@ window.addEventListener("keyup",event=>{if(event.code==="Space"){spaceDown=false
 document.querySelectorAll<HTMLButtonElement>("[data-tool]").forEach(button=>button.addEventListener("click",()=>setTool(button.dataset.tool as Tool)));
 document.querySelector("#delete-selection")?.addEventListener("click",()=>{if(selectedId){model.entities.splice(model.entities.findIndex(e=>e.id===selectedId),1);selectedId=null;rebuildIndex();render();}});
 document.querySelector("#toggle-snap")?.addEventListener("click",event=>{snapEnabled=!snapEnabled;(event.currentTarget as HTMLElement).classList.toggle("off",!snapEnabled);render();});
-document.querySelector("#new-project")?.addEventListener("click",()=>{if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;preview=null;draftSession.clear();rebuildIndex();render();});
+document.querySelector("#new-project")?.addEventListener("click",()=>{if(model.entities.length&&!confirm("Start a new project? Unsaved changes will be lost."))return;model.entities.length=0;nextId=1;selectedId=null;firstPoint=null;preview=null;draftFields.clear();rebuildIndex();render();});
 document.querySelector("#zoom-fit")?.addEventListener("click",()=>{
   if(!model.entities.length){const rect=svg.getBoundingClientRect();view={origin:{x:rect.width/2,y:rect.height/2},scale:.08};}
   else {const xs:number[]=[],ys:number[]=[];for(const e of model.entities){if("start" in e){xs.push(e.start.x,e.end.x);ys.push(e.start.y,e.end.y);}else if(e.type==="column"){xs.push(e.center.x-e.width/2,e.center.x+e.width/2);ys.push(e.center.y-e.height/2,e.center.y+e.height/2);}}if(xs.length){const rect=svg.getBoundingClientRect(),w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);view.scale=Math.min(3,Math.max(.0005,Math.min((rect.width-120)/(w+1000),(rect.height-120)/(h+1000))));view.origin={x:rect.width/2-(Math.min(...xs)+Math.max(...xs))/2*view.scale,y:rect.height/2+(Math.min(...ys)+Math.max(...ys))/2*view.scale};}}
